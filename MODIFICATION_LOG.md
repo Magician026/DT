@@ -486,3 +486,45 @@ cd "$BASE/UniVTAC details"
 2. 先运行 `nvidia-smi`，做合规的极短 baseline/V1 training smoke，记录 GPU、显存、config 和 checkpoint。
 3. 通过 smoke 后再分别进行 baseline 与 V1 encoder training；policy architecture 保持不变。
 4. policy training 与 official evaluation 前再次完整阅读官方 eval 文档，并严格复用其中的环境、checkpoint、simulator、seed 和 episode 设置。
+
+## 2026-09-04 16:48 +08:00：GPU mini-step smoke 与真实数据入口审计
+
+### 当前 Git branch / commit
+
+`exp/detail-preserving-v1` / `a1d39ab`（日志更新前）。本次只补充验证记录，没有修改模型或数据管线。
+
+### GPU 状态与实验 command
+
+启动前执行 `nvidia-smi`。GPU2 状态为：总显存 `24564 MiB`，已用 `6410 MiB`，剩余 `17837 MiB`，GPU utilization `76%`；已有 PID `473862` 使用约 `5852 MiB`，未杀进程、未修改其他任务。按 encoder training 规则，GPU2 满足剩余显存大于 12 GB 的门槛。
+
+实验使用：
+
+```bash
+CUDA_VISIBLE_DEVICES=2 \
+  /usr1/home/s126mdg41_04/isaacsim-4.5.0/kit/python/bin/python3 <CPU/GPU mini-step script>
+```
+
+脚本对 `original` 与 `detail_v1` 各执行一次合成 tactile batch 的 `reconstruct → MSE loss → backward → Adam step`，并在内存中用 `torch.save`/`load_state_dict(strict=True)` 做 checkpoint round-trip。该实验不是实际数据训练，也不产生 reconstruction 或 manipulation 结果。
+
+### 结果
+
+- Original：loss `0.0958312377`，梯度 finite，strict reload 通过，峰值显存约 `529.3 MiB`。
+- Detail V1：loss `0.0919276103`，梯度 finite，strict reload 通过，峰值显存约 `542.7 MiB`。
+- 输出：`GPU_TRAINING_SMOKE_PASSED`。
+
+显存差异约 `13.4 MiB`，但这是 batch=2、仅 `marked_rgb` decoder、单步合成输入的 code smoke，不能外推正式训练成本。
+
+### 真实数据入口审计
+
+- `encoder/train.py` 当前硬编码查找 `../data/contact-gs/<prism>/hdf5`，在 details 中找到 `0` 个文件。
+- details 现有数据目录为 `data/insert_HDMI/clean` 和 `data/lift_bottle/clean`，每个目录目前有 100 个 HDF5 文件。
+- 现有 HDF5 的 tactile group 是 `tactile/left_gsmini` 与 `tactile/right_gsmini`，而 `encoder/dataloader.py` 使用 `left_tactile/right_tactile`；`lift_bottle` 的 actor key 也不是 `actor/prism`。
+- 只读试读 `insert_HDMI` 时，当前 dataloader 在旧 key 上触发 `KeyError`。因此暂不修改 dataloader、数据 schema 映射、输入/target resize 或训练入口；否则会同时改变 baseline 的数据处理，污染第一版 encoder 对比。
+
+### 当前结论与阻塞边界
+
+模型与 policy 接口已经完成 code-level validation；真实 reconstruction training 尚未开始。下一步若要取得真实 encoder training result，需要单独决定并记录一个兼容数据源/数据适配方案，同时先让 Original baseline 在同一数据处理下跑通。该问题属于既有数据管线，不把 GPU mini-step 或现有 checkpoint 当作正式 baseline result。
+
+### 回退方法
+
+本次没有持久化模型/数据文件，也没有产生需删除的服务器 artifact。代码回退点仍为 `c692392`；结果记录可通过 Git revert 回退日志 commit。
