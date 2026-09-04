@@ -547,3 +547,19 @@ CUDA_VISIBLE_DEVICES=2 \
 - 输出：`POLICY_ENCODER_CHECKPOINT_LOAD_PASSED`。
 
 该验证没有写入或覆盖 checkpoint；`checkpoints/encoder.pth` 仍由 `.gitignore` 排除，不上传到 DT。V1 checkpoint 尚未产生，因为真实 encoder training 被上一节记录的数据入口不匹配阻塞。
+
+## 2026-09-04 16:52 +08:00：ACT 启动上下文 import 验证
+
+### 验证方法与结果
+
+在官方脚本式工作目录 `policy/ACT` 下运行 Isaac Kit Python，成功 import：
+
+- `act_policy.ACTPolicy`
+- `imitate_episodes.make_policy`
+- `detr.models.detr_vae.build`
+
+输出：`ACT_SCRIPT_CONTEXT_IMPORT_PASSED`。从 details 项目根目录将 `imitate_episodes` 作为 package import 会因原始源码的 `from utils import load_data` 失败；这是既有脚本启动约束。未做无关 import 重构，后续训练按 `policy/ACT` 的官方工作目录执行。
+
+### Evaluation 备注
+
+`scripts/eval_policy.py` 在 import 时会解析命令行并启动 Isaac App，因此不采用普通 package import 作为验证方式；正式 evaluation 仍必须按官方文档给出的脚本命令、环境初始化和 GPU 规则执行。
