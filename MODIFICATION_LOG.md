@@ -670,3 +670,100 @@ CUDA_VISIBLE_DEVICES=2 \
 - smoke test：对 `d280340` 使用 Git revert。
 - validation document：对 `d16335d` 使用 Git revert。
 - 不执行 reset/clean，不删除上述 smoke checkpoint、数据或日志。
+
+## 2026-09-04 17:35 +08:00：Insert HDMI 第一任务切换修改前计划
+
+### 当前 Git branch
+
+- `exp/detail-preserving-v1`
+
+### 当前稳定 commit / rollback point
+
+- `ded9666e137d001284170c14048db8b0341cdf4b`
+- 本次修改失败时保留修改历史，并以该 commit 为回退参照；不使用 `git reset --hard`、`git clean` 或删除实验产物。
+
+### 修改目标
+
+将第一阶段正式 downstream 验证任务从 `lift_bottle` 调整为 `Insert HDMI`。原因是已有 UniVTAC lift bottle 结果的成功率较高，存在 ceiling effect；Insert HDMI 更适合作为第一项检验 Detail-Preserving Encoder V1 是否能保留并利用局部 tactile spatial detail 的任务。
+
+### 调查事实与研究判断
+
+- ACT 所需的 lift bottle 数据位于原始项目的 `policy/ACT/data/sim-lift_bottle/demo-50`，不在项目根目录 `data/`。
+- ACT 所需的 Insert HDMI 数据位于原始项目的 `policy/ACT/data/sim-insert_HDMI/demo-50`，包含 50 个 HDF5 episode，约 4.7 GB。
+- Insert HDMI HDF5 已确认包含 `/action`、`/observations/qpos`、`/observations/images/cam_high`、`tac_left`、`tac_right`，可直接作为 ACT loader 的输入。
+- `details/data/insert_HDMI/clean` 是 encoder reconstruction 使用的 raw tactile schema，不等同于 ACT episode 数据；本次不做未经验证的 schema 改名或复制。
+
+### 准备修改的文件
+
+- `policy/ACT/SIM_TASK_CONFIGS.json`：保留原有 lift bottle 条目，新增 `sim-insert_HDMI-demo-50`；配置引用服务器上原始项目的 ACT 数据目录，只读使用，不复制数据。
+- `VALIDATION_WORKFLOW.md`：将 Insert HDMI 写为第一项正式对比任务，明确 encoder 是否需要重训、policy 是否需要重训、official eval 只做推理，以及 lift bottle 的次要对照定位。
+- `MODIFICATION_LOG.md`：记录任务选择、数据路径、schema 检查、验证命令和后续结果。
+
+### 不在本次修改范围内
+
+- 不修改原始 `/usr1/home/s126mdg41_04/UniVTAC` 项目。
+- 不复制、删除或覆盖任何 dataset、checkpoint、log 或 simulation output。
+- 不修改 decoder、ACT policy architecture、action semantics、temporal module 或 simulator。
+- 不启动正式 policy training 或 official evaluation；先完成配置解析和数据 loader smoke。
+
+### 预期验证与风险
+
+- 先确认 JSON 可解析、Insert HDMI 50 个 episode 可访问、代表性 HDF5 keys/shapes 正确，并能被 ACT 的 `TacArenaDataset` 读取。
+- 训练前仍需重新执行 `nvidia-smi`；policy training 要求剩余显存大于 12 GB，official evaluation 尽量使用真正空闲 GPU。
+- 绝对路径依赖当前服务器环境，因此文档会明确指出该配置是 mlda2 上的只读数据引用，不代表 DT 仓库携带数据。
+
+### 回退方法
+
+- 本次修改前稳定点为 `ded9666e137d001284170c14048db8b0341cdf4b`。
+- 通过保留 lift bottle 条目、单独提交 Insert HDMI 配置和文档，必要时使用文件级 revert 回退；不删除已有数据或 checkpoint。
+
+## 2026-09-04 17:55 +08:00：Insert HDMI 任务配置与 ACT 数据验证完成
+
+### 当前 Git branch / commit
+
+- branch：`exp/detail-preserving-v1`
+- 修改前 commit：`84d4b28 docs: plan insert hdmi validation task`
+- 本次配置和文档修改尚未覆盖任何已有 checkpoint 或数据目录。
+
+### 修改目标
+
+将第一项 downstream 验证固定为 `sim-insert_HDMI-demo-50`，并使验证文档回答清楚：代码 smoke 不需要重训；正式 reconstruction 对比需要 Original/V1 成对重训 encoder；policy 需要在相同 ACT 数据和预算下分别训练；official evaluation 不重训，只加载对应 policy checkpoint。
+
+### 修改的文件
+
+- `policy/ACT/SIM_TASK_CONFIGS.json`
+  - 保留 `sim-lift_bottle-demo-50`；将其路径修正为原始项目中实际存在的只读 ACT 数据路径。
+  - 新增 `sim-insert_HDMI-demo-50`，指向：
+    `/usr1/home/s126mdg41_04/UniVTAC/policy/ACT/data/sim-insert_HDMI/demo-50`
+- `VALIDATION_WORKFLOW.md`
+  - 将 Insert HDMI 设为第一项正式对比任务。
+  - 补充 ACT HDF5 schema、数据边界、loader smoke、policy training 和 task-specific official eval 命令。
+  - 明确 lift bottle 只作为后续/辅助对照。
+
+### 数据验证结果
+
+- 配置 JSON 解析通过。
+- lift bottle 与 Insert HDMI 两个 ACT 数据目录均实际存在，各有 50 个 `episode_*.hdf5`。
+- Insert HDMI 代表性 episode：`action [117,8] float32`、`observations/qpos [117,8] float32`、`cam_high [117,270,480,3] uint8`、`tac_left/tac_right [117,240,320,3] uint8`。
+- 使用 `UniVTAC` Conda Python 进行 CPU-only `TacArenaDataset` smoke：输出 `cam [1,3,256,256]`、tactile `[2,3,256,256]`、qpos `[8]`、action chunk `[50,8]`、padding `[50]`，结果 `ACT_DATASET_SMOKE_PASSED`。
+- 直接使用 Isaac Kit 裸 `python3` 做该 loader smoke 时因其环境没有 `numpy` 而失败；这是解释器选择问题，不是数据失败。后续纯数据/loader 检查使用 `UniVTAC` Conda Python；涉及 simulator 的 official eval 仍按官方文档使用 Isaac Kit 环境。
+
+### GPU / command / checkpoint
+
+- GPU：N/A；本次只读配置和 CPU 数据 loader 验证，没有训练或 evaluation。
+- 验证命令：在 `details/policy/ACT` 下使用 `/usr1/home/s126mdg41_04/miniconda3/envs/UniVTAC/bin/python` 解析 `SIM_TASK_CONFIGS.json`、检查两个目录和 HDF5 keys/shapes，并读取 Insert HDMI 的 `TacArenaDataset` 样本。
+- checkpoint：N/A；没有覆盖或生成 checkpoint。
+
+### 是否改变 encoder / downstream 接口
+
+- 没有改变 encoder、decoder、ACT policy architecture 或 simulator 接口。
+- 只增加/修正 task dataset config 和验证文档；Insert HDMI policy dataset 仍在原始项目中只读引用，不复制到 DT、不提交 GitHub。
+
+### 当前结论与下一步
+
+ACT 所需的 `data/sim-insert_HDMI/demo-50` 已确认存在于原始 UniVTAC 的 `policy/ACT/data` 下，不需要去官网下载。下一步先重新执行 GPU 状态检查，再进行同一 Insert HDMI raw data、同一训练预算下的 Original/V1 encoder reconstruction training；只有两套 encoder checkpoint 都完成并通过严格加载后，才进入成对 ACT policy training。正式 eval 前必须再次完整阅读 lift bottle official eval 文档并按 Insert HDMI 的 task/checkpoint 替换参数。
+
+### 回退方法
+
+- 配置/文档修改可通过文件级 revert 回退到 `84d4b28`。
+- 若需要完全回到任务切换前的稳定代码，回退参照仍为 `ded9666`；不删除数据、checkpoint 或日志。

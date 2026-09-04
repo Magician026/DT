@@ -21,12 +21,14 @@
     Original encoder
         -> same ACT policy architecture
         -> same policy training protocol
-        -> official lift_bottle evaluation
+        -> official Insert HDMI evaluation
 
     DetailPreservingEncoderV1
         -> same ACT policy architecture
         -> same policy training protocol
-        -> official lift_bottle evaluation
+        -> official Insert HDMI evaluation
+
+    lift_bottle 保留为后续/辅助对照，不作为第一项主要结论来源。
 
 第一阶段只改变 encoder representation：
 
@@ -46,6 +48,8 @@
 官方 eval 文档：
 
     /usr1/home/s126mdg41_04/UniVTAC/eval/lift_bottle_official_univtac_eval.md
+
+该文档记录的是 lift bottle 的已验证 official pipeline；Insert HDMI 沿用其中的环境初始化、路径、GPU、checkpoint 和 simulator 排查原则，但 task、dataset、policy checkpoint 和结果目录必须替换为 Insert HDMI 对应值。正式 Insert HDMI eval 前仍需完整重读该文档，不能把 lift bottle 的结果或参数直接当作 Insert HDMI 结果。
 
 每次运行 Isaac/PyTorch 前：
 
@@ -198,15 +202,27 @@ ACT policy loader 需要：
     /observations/images/<camera_name>
     /observations/images/<tactile_name>
 
-当前 policy/ACT/SIM_TASK_CONFIGS.json 指向 ./data/sim-lift_bottle/demo-50，但该目录目前不存在。details 现有 raw HDF5 是 actor/embodiment/observation/tactile schema，不能直接当作 ACT episode dataset，也不能未经验证地把 pose/joint state 改名成 action。
+当前第一任务使用 `sim-insert_HDMI-demo-50`。ACT 数据已在服务器本地找到：
+
+    /usr1/home/s126mdg41_04/UniVTAC/policy/ACT/data/sim-insert_HDMI/demo-50
+
+该目录包含 50 个 episode HDF5，约 4.7 GB；代表性 episode 已确认：
+
+    /action                                  [117, 8] float32
+    /observations/qpos                       [117, 8] float32
+    /observations/images/cam_high            [117, 270, 480, 3] uint8
+    /observations/images/tac_left            [117, 240, 320, 3] uint8
+    /observations/images/tac_right           [117, 240, 320, 3] uint8
+
+`details/policy/ACT/SIM_TASK_CONFIGS.json` 已保留 lift bottle 条目，并新增 `sim-insert_HDMI-demo-50`。两个条目引用原始项目中的只读 ACT 数据路径；dataset 不复制到 DT，也不会提交 GitHub。`details/data/insert_HDMI/clean` 仍仅用于 encoder reconstruction，不能直接代替 ACT episode dataset。
 
 policy training 的前置条件：
 
-1. 找到或生成 ACT 所需 episode dataset；
-2. 检查 episode 数量、camera/tactile key、action shape、qpos shape；
-3. 生成或核对 dataset_stats.pkl；
-4. 先让 Original policy 跑通；
-5. 再用完全相同的数据和训练预算训练 V1 policy。
+    1. 检查 `sim-insert_HDMI-demo-50` 的 episode 数量和只读路径；
+    2. 检查 camera/tactile key、action shape、qpos shape，并用 ACT `TacArenaDataset` 读取一个样本；
+    3. 由同一数据和同一 split 生成/核对 `dataset_stats.pkl`；
+    4. 先让 Original policy 跑通；
+    5. 再用完全相同的数据和训练预算训练 V1 policy。
 
 ### C2. 两个 policy config
 
@@ -238,7 +254,7 @@ V1 模板：
     CUDA_VISIBLE_DEVICES=<GPU_ID> \
       "$ISAAC/kit/python/bin/python3" imitate_episodes.py \
       --ckpt_dir <POLICY_OUTPUT_DIR> \
-      --task_name sim-lift_bottle-demo-50 \
+      --task_name sim-insert_HDMI-demo-50 \
       --config_path <TRAIN_CONFIG_YAML> \
       --seed 42
 
@@ -250,16 +266,16 @@ Original/V1 使用不同 output directory，禁止覆盖已有 official/local po
 
     /usr1/home/s126mdg41_04/UniVTAC/eval/lift_bottle_official_univtac_eval.md
 
-按文档逐项确认 checkpoint、stats、环境初始化、simulator、task、deploy config、seed、episode 和 GPU。选择真正空闲 GPU，不杀其他用户进程。
+按文档逐项确认 checkpoint、stats、环境初始化、simulator、task、deploy config、seed、episode 和 GPU。这里的 task 使用 `insert_HDMI`，policy 使用对应的 Original/V1 policy checkpoint；选择真正空闲 GPU，不杀其他用户进程。
 
 命令模板：
 
     cd "/usr1/home/s126mdg41_04/UniVTAC details"
     CUDA_VISIBLE_DEVICES=<FREE_GPU> \
       "$ISAAC/kit/python/bin/python3" scripts/eval_policy.py \
-      lift_bottle demo ACT/deploy --headless --total_num 100
+      insert_HDMI demo ACT/deploy --headless --total_num 100
 
-具体 environment workaround、checkpoint 和变量以官方文档为准。记录完整命令、checkpoint、config、eval result directory 和 success count。
+具体 environment workaround、checkpoint 和变量以官方 lift bottle 文档中已验证的流程为准；Insert HDMI 的 task config、policy checkpoint、seed 和结果目录必须单独记录。记录完整命令、checkpoint、config、eval result directory 和 success count。
 
 ## 9. 结果记录模板
 
@@ -294,8 +310,8 @@ Original/V1 使用不同 output directory，禁止覆盖已有 official/local po
 | latent dimension | 512 | 512 |
 | encoder parameter count | 11,439,168 backbone params | 11,850,048 backbone params |
 | reconstruction loss | 待正式实验 | 待正式实验 |
-| policy validation loss | 待 policy dataset | 待 policy dataset |
-| manipulation success rate | 待 official eval | 待 official eval |
+| policy validation loss | 待 Insert HDMI policy training | 待 Insert HDMI policy training |
+| manipulation success rate | 待 Insert HDMI official eval | 待 Insert HDMI official eval |
 | GPU memory | 待正式实验 | 待正式实验 |
 
 ## 10. 结果解释
@@ -330,6 +346,7 @@ Original/V1 使用不同 output directory，禁止覆盖已有 official/local po
 - 正式规模 Original/V1 encoder reconstruction training；
 - ACT policy dataset 的生成/适配与 policy training；
 - Original/V1 policy controlled comparison；
-- official lift_bottle evaluation。
+- official Insert HDMI evaluation；
+- lift bottle secondary comparison（暂不作为第一项任务）。
 
-当前结论：V1 已完成接口级和短训练可行性验证，但尚未证明 performance improvement。下一步应先解决 policy-format dataset，再按本文流程进行成对重训和 official eval。
+当前结论：V1 已完成接口级和短训练可行性验证，但尚未证明 performance improvement。Insert HDMI 的 policy-format dataset 已在原始项目 ACT 目录中找到并完成 schema 事实核验；下一步是先完成 details 配置与 loader smoke，再按本文流程进行 Original/V1 成对 encoder 重训、policy training 和 official eval。
