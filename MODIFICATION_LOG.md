@@ -767,3 +767,79 @@ ACT 所需的 `data/sim-insert_HDMI/demo-50` 已确认存在于原始 UniVTAC �
 
 - 配置/文档修改可通过文件级 revert 回退到 `84d4b28`。
 - 若需要完全回到任务切换前的稳定代码，回退参照仍为 `ded9666`；不删除数据、checkpoint 或日志。
+
+## 2026-09-04 18:02 +08:00：Insert HDMI 正式 encoder training 首轮 OOM
+
+### 实验配置
+
+- branch：`exp/detail-preserving-v1`
+- commit：`5b4d177`
+- task/data：Insert HDMI；`schema=gsmini`；`../data/insert_HDMI/clean`；100 个 HDF5 文件；随机抽取 1000 samples；image/depth target `256×256`；seed `42`。
+- Original 与 Detail V1：均为 5 epochs、batch size 64、num_workers 8、lr `1e-3`、相同 reconstruction loss weights。
+
+### GPU 与命令
+
+- GPU0：启动时约 24,230 MiB free，Original 进程 PID 494589。
+- GPU1：启动时约 24,229 MiB free，Detail V1 进程 PID 494590；由于 `CUDA_VISIBLE_DEVICES=1`，PyTorch 报错中的 logical GPU 0 对应物理 GPU1。
+- 两张卡启动时均无 compute process；GPU2/3 上已有其他用户任务，未触碰。
+
+### 结果与分类
+
+- 两个进程均完成数据 metadata 读取并进入 epoch 1，但在第一个 reconstruction batch 的 decoder convolution 触发 `torch.OutOfMemoryError`。
+- 报错需要额外约 2.00 GiB，进程当时约使用 22.5 GiB；没有生成 `best.pth` 或 epoch checkpoint。
+- 这是 `B. Training failure / OOM`，不是 `C. Research failure`；不能据此判断 Original/V1 的重建效果。
+- 已保留两个空的外层 run log 和包含 OOM traceback 的 training log，未删除任何文件。
+
+### 重试计划
+
+- 仅将共同的 `batch_size` 从 64 调整为 16，其他变量保持不变；Original/V1 继续分别使用 GPU0/GPU1 和独立输出目录。
+- 重试前重新执行 `nvidia-smi`。若 batch size 16 仍 OOM，再停止并记录，不自动继续降低或修改网络。
+
+### 回退方法
+
+- 本轮没有代码结构修改；OOM 运行不会覆盖既有 checkpoint。
+- 后续如需回看首轮状态，使用本条记录和 commit `5b4d177`；不删除 OOM 日志。
+
+## 2026-09-04 18:08 +08:00：Insert HDMI Original/V1 encoder training batch16 完成
+
+### 实验配置
+
+- branch：`exp/detail-preserving-v1`
+- code commit：`6cf02b6`（本次只运行既有代码，没有 architecture 修改）
+- task/data：Insert HDMI；`schema=gsmini`；`../data/insert_HDMI/clean`；100 个 HDF5 文件；随机抽取 1000 samples；RGB/depth target `256×256`；seed `42`。
+- Original 与 Detail V1 使用完全相同的 5 epochs、batch size 16、num_workers 8、lr `1e-3` 和 loss weights：`marked_rgb=1.0`、`rgb=1.0`、`depth=0.5`、`marker=0.5`、`pose=0.5`。
+- batch size 16 是在 batch64 首轮 OOM 后的共同资源修正；两者仍保持相同设置，可进行成对比较。
+
+### GPU 与命令
+
+- Original：物理 GPU0；启动前 `24,230 MiB` free；观察到约 `9,792 MiB` used；外层 PID `658633`。
+- Detail V1：物理 GPU1；启动前 `24,229 MiB` free；观察到约 `9,837 MiB` used；外层 PID `658634`。
+- GPU2/3 当时由其他用户任务使用，未触碰；没有 kill 或修改其他进程。
+- 两个命令分别为：
+  - `CUDA_VISIBLE_DEVICES=0 ... train.py all 1000 --encoder_type original --schema gsmini --data_root ../data/insert_HDMI/clean --epochs 5 --batch_size 16 --num_workers 8 --seed 42`
+  - `CUDA_VISIBLE_DEVICES=1 ... train.py all 1000 --encoder_type detail_v1 --schema gsmini --data_root ../data/insert_HDMI/clean --epochs 5 --batch_size 16 --num_workers 8 --seed 42`
+
+### checkpoint 与结果
+
+- Original checkpoint directory：`encoder/ablation/data_1000/resnet18/20260904-175305/`
+- Original `best.pth`：165,482,707 bytes；SHA256 `830ff60ceb6cab1535aee81140244be8e93cfc1ef1c27165e0e65fbc56018c2c`
+- Original best validation loss：`0.003893`；训练过程无 NaN/OOM。
+- Detail V1 checkpoint directory：`encoder/ablation/data_1000/detail_v1/resnet18/20260904-175305/`
+- Detail V1 `best.pth`：167,132,311 bytes；SHA256 `624ce147b2b8beebb09fd5bb1ebbce6578f452e937f30ca65df64e3120ac5555`
+- Detail V1 best validation loss：`0.004047`；训练过程无 NaN/OOM。
+- 两个目录均生成 `ep0.pth`–`ep4.pth` 和 `best.pth`，没有覆盖既有 `checkpoints/encoder.pth`。
+
+### 严格加载验证
+
+- Original 和 Detail V1 均使用对应 encoder type、完整 supervision decoder 配置和 `strict=True` 加载通过，输出 `All keys matched successfully`。
+- 完整训练模型参数量：Original `41,339,340`；Detail V1 `41,750,220`。
+- 该参数量差异来自 V1 detail branch/head；latent dimension 仍为 512，decoder interface 未改变。
+
+### 结果解释与下一步
+
+本轮只说明两种 encoder 都能在 batch16 下稳定完成 5-epoch reconstruction training，并得到可严格加载的 checkpoint。当前 V1 validation loss 略高于 Original，不能据此否定 spatial-detail hypothesis；需要在相同 Insert HDMI ACT 数据、相同 policy architecture 和训练预算下进行 downstream policy 对比。下一步是先用这两份 checkpoint 做 policy-side backbone/load smoke，再分别训练 Original/V1 ACT policy；正式 evaluation 前重新阅读 official eval 文档并重新检查空闲 GPU。
+
+### 回退方法
+
+- 训练结果是新增独立目录；失败或不采用时保留 checkpoint 和日志，不删除文件。
+- 代码回退参照为 `6cf02b6` 之前的稳定 details commit；本轮无代码改动，不需要 reset/clean。
