@@ -563,3 +563,110 @@ CUDA_VISIBLE_DEVICES=2 \
 ### Evaluation 备注
 
 `scripts/eval_policy.py` 在 import 时会解析命令行并启动 Isaac App，因此不采用普通 package import 作为验证方式；正式 evaluation 仍必须按官方文档给出的脚本命令、环境初始化和 GPU 规则执行。
+
+## 2026-09-04 16:58 +08:00：配置化 encoder 数据 schema adapter 修改前计划
+
+### 当前稳定 rollback point
+
+- branch：`exp/detail-preserving-v1`
+- commit：`2cc34a8 docs: record act import context`
+- 当前 details 工作树仍保留任务开始前的历史 deletion、1 个既有 modified 文件和 untracked 数据/配置；本次只对下列明确文件做修改，不执行 reset/clean。
+
+### 修改目标
+
+让 encoder reconstruction 能在当前 details 已有的 HDF5 数据上进行可复现的 baseline/V1 公平对比，同时不改变原有 legacy 数据入口的默认行为。
+
+### 计划修改文件
+
+- `encoder/dataloader.py`：增加 schema 配置。保留默认 `legacy_contact_gs`；新增显式 `gsmini`，映射 `left_gsmini/right_gsmini`，自动选择 `actor/prism` 或 `actor/bottle`，并在新 schema 下把 RGB/depth target 对齐到 decoder 的 256×256 输出。
+- `encoder/train.py`：增加 `--schema`、`--data_root`、`--image_size`、`--epochs`、`--batch_size`、`--num_workers` 参数；旧参数默认值与旧路径逻辑保持一致；修复空/单 batch 时的平均 loss 除数问题；输出路径继续按 encoder type 隔离。
+- `encoder/data_adapter_smoke_test.py`：只读验证当前 `insert_HDMI` HDF5 可被新 schema 解析，检查样本 key、shape、dtype。
+- `VALIDATION_WORKFLOW.md`：记录从 code smoke、encoder retraining、policy retraining 到 official eval 的完整流程和 checkpoint 判定规则。
+- `MODIFICATION_LOG.md`：记录实际结果、数据边界和 GPU/command。
+
+### 不在本次范围内
+
+- 不修改 decoder、ACT Transformer、action head、temporal module 或 policy action semantics。
+- 不把 `gsmini` 数据强行映射成 policy 训练所需的 `/action` 与 `/observations` schema；policy 数据适配另行审计。
+- 不覆盖现有 `checkpoints/encoder.pth`，不删除数据/log/checkpoint，不修改 Original 项目。
+
+### 预期风险与回退
+
+- legacy 默认路径必须保持原样；新训练只能显式使用 `--schema gsmini`。
+- 新 schema 的 256×256 resize 是为匹配当前 decoder 接口；Original 与 V1 必须使用完全相同 schema、resize、split seed 和 loss weights。
+- 如 smoke 或训练失败，保留 commit，使用 Git revert 回退本次文件级修改；不删除失败结果，不重写 history。
+
+## 2026-09-04 17:10 +08:00：配置化 encoder data adapter 与验证流程文档完成
+
+### 当前 Git branch / rollback point
+
+- branch：`exp/detail-preserving-v1`
+- 当前代码 commit（日志提交前）：`d16335d docs: add encoder validation workflow`
+- 本次修改前 rollback point：`333741f docs: plan configurable data schema adapter`
+
+### 修改目标与实际变化
+
+按授权在 details 内增加配置化 encoder 数据入口：
+
+- `encoder/dataloader.py` 增加 `legacy_contact_gs` 与 `gsmini` schema。
+- 默认仍为 `legacy_contact_gs`，旧的 `left_tactile/right_tactile` 和 `../data/contact-gs` 查找逻辑不被静默替换。
+- `gsmini` 显式支持当前数据的 `left_gsmini/right_gsmini`，自动解析 `actor/prism` 或 `actor/bottle` pose。
+- `gsmini` 默认将 RGB 和 depth target 对齐为 256×256，匹配现有 decoder 输出；Original/V1 使用同一处理时仍可公平对比。
+- `encoder/train.py` 增加 `--schema`、`--data_root`、`--image_size`、`--epochs`、`--batch_size`、`--num_workers`、`--seed`。
+- 修正 train/validation loss 在 batch 数量很小时的平均值除数；不改变模型结构。
+- 增加 `encoder/data_adapter_smoke_test.py`。
+- 增加 `VALIDATION_WORKFLOW.md`，说明何时需要重训 encoder、policy 和 official eval 的完整顺序。
+
+没有修改 decoder、ACT policy architecture、action semantics、Original 项目或现有 checkpoint；没有删除服务器文件。
+
+### Data adapter 验证
+
+结果：
+
+- `insert_HDMI/clean`：100 files，单文件 236 samples，样本 shape 为 RGB `[3,256,256]`、marked RGB `[3,256,256]`、depth `[1,256,256]`、marker `[63,2]`、pose `[7]`。
+- `lift_bottle/clean`：100 files，单文件 622 samples，shape 同上。
+- 缺失 legacy root 时显式报 `FileNotFoundError`，不会静默使用另一套数据。
+- 输出：`DATA_ADAPTER_SMOKE_PASSED`，py_compile 通过。
+
+### 真实数据 short training smoke
+
+启动前 `nvidia-smi`：GPU2 总显存 `24564 MiB`，已用 `23 MiB`，剩余 `24224 MiB`，utilization `0%`；没有占用或杀掉其他进程。
+
+两个运行使用完全相同的：
+
+- `schema=gsmini`
+- `data_root=../data/insert_HDMI/clean`
+- `data_num=8`
+- `epochs=1`
+- `batch_size=2`
+- `num_workers=0`
+- `seed=42`
+- 默认 loss weights
+
+结果：
+
+- Original validation loss：`0.263397`。
+- Original checkpoint：`encoder/ablation/data_8/resnet18/20260904-170250/best.pth`。
+- Detail V1 validation loss：`0.266245`。
+- Detail V1 checkpoint：`encoder/ablation/data_8/detail_v1/resnet18/20260904-170312/best.pth`。
+
+两者均完成真实 HDF5 读取、train/validation loop 和 checkpoint 保存；checkpoint 分目录隔离，未覆盖 `checkpoints/encoder.pth`。这些是 8-sample/1-epoch code smoke，不能当作性能结论。
+
+### 验证文档结论
+
+`VALIDATION_WORKFLOW.md` 已写明：
+
+- 代码 smoke 不需要重训。
+- V1 reconstruction 对比需要重新训练 V1 encoder。
+- 为了公平，Original 也应在同一新 schema、resize、seed、loss 和训练预算下重跑；旧 checkpoint 只作为兼容性参考。
+- policy 必须在 encoder checkpoint 准备好后，对 Original/V1 使用同一个 ACT architecture 分别训练。
+- official eval 不重新训练，只加载 policy checkpoint，并且必须再次阅读官方 eval 文档、选择空闲 GPU。
+- 当前 policy dataset 仍是独立阻塞：`SIM_TASK_CONFIGS.json` 指向不存在的 `data/sim-lift_bottle/demo-50`，raw HDF5 不能未经语义验证直接改成 ACT action schema。
+
+### 回退方法
+
+- data adapter：对 `ba084fa` 使用 Git revert，或回到 `333741f` 后建立文件级回退 commit。
+- training CLI：对 `7538e5c` 使用 Git revert。
+- smoke test：对 `d280340` 使用 Git revert。
+- validation document：对 `d16335d` 使用 Git revert。
+- 不执行 reset/clean，不删除上述 smoke checkpoint、数据或日志。

@@ -1,5 +1,6 @@
 import json
 import time
+import random
 import torch
 import torch.nn as nn
 from pathlib import Path
@@ -37,18 +38,22 @@ def train(
     epoches=5,
     lr=1e-4,
     loss_weights:dict={'rgb_marked': 1.0},
+    run_metadata:dict|None=None,
 ):
     global backbone, encoder_type, timestr, ckpt_root, weights
     save_root = get_save_root()
     save_root.mkdir(parents=True, exist_ok=True)
-    log(json.dumps({
+    run_config = {
         'status': 'config',
         'backbone': backbone,
         'encoder_type': encoder_type,
         'epoches': epoches,
         'lr': lr,
         'loss_weights': loss_weights,
-    }, ensure_ascii=False))
+    }
+    if run_metadata:
+        run_config.update(run_metadata)
+    log(json.dumps(run_config, ensure_ascii=False))
 
     device = torch.device('cuda')
     supervise = list(loss_weights.keys())
@@ -91,7 +96,7 @@ def train(
                     'losses': loss_dict
                 }, ensure_ascii=False))
             
-        train_losses.append(train_loss / idx)
+        train_losses.append(train_loss / max(len(train_loader), 1))
 
         valid_loss = 0.0
         model.eval()
@@ -117,40 +122,73 @@ def train(
                     }, ensure_ascii=False))
         
         torch.save(model.state_dict(), str(save_root / f'ep{epoch}.pth'))
-        valid_losses.append(valid_loss / idx)
-        if valid_loss / idx < best_loss:
-            best_loss = valid_loss / idx
+        valid_mean_loss = valid_loss / max(len(valid_loader), 1)
+        valid_losses.append(valid_mean_loss)
+        if valid_mean_loss < best_loss:
+            best_loss = valid_mean_loss
             torch.save(model.state_dict(), str(save_root / 'best.pth'))
             print(f'  Best model saved with recon loss {best_loss:.6f}')
 
-def main():
+def main(
+    schema='legacy_contact_gs',
+    data_root=None,
+    image_size=None,
+    epoches=5,
+    batch_size=64,
+    num_workers=8,
+    seed=42,
+):
     global data_length
-    prism_names = ['CircleShell', 'Cross', 'Cubehole', 'Cuboid', 'Cylinder', 'Doubleslope', 'Hemisphere', 'Line', 'Pacman', 'S', 'Sphere', 'Star', 'Tetrahedron', 'Torus']
-    hdf5_paths = []
-    for name in prism_names:
-        l = list(Path(f'../data/contact-gs/{name}/hdf5').glob('*.hdf5'))
-        hdf5_paths.extend(l)
-    print(f'Found {len(hdf5_paths)} hdf5 files.')
-    data = HDF5Dataset(hdf5_paths)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    hdf5_paths = discover_hdf5_paths(schema=schema, data_root=data_root)
+    print(f'Found {len(hdf5_paths)} hdf5 files for schema={schema}.')
+    data = HDF5Dataset(hdf5_paths, schema=schema, image_size=image_size)
+    if data_length <= 1:
+        raise ValueError('data_length must be at least 2 for a train/validation split.')
+    if data_length > len(data):
+        raise ValueError(
+            f'data_length={data_length} exceeds available dataset length={len(data)}.'
+        )
     data._data_metadata = list(np.array(data._data_metadata)[
         np.random.choice(len(data._data_metadata), data_length, replace=False)])
     print(f'Dataset length: {len(data)}')
     
-    batch_size = 64
     valid_size = int(len(data) * 0.2)
-    generator = torch.Generator().manual_seed(42)
+    generator = torch.Generator().manual_seed(seed)
     train_size = len(data) - valid_size
     train_data, valid_data = random_split(
         data, [train_size, valid_size], generator=generator)
     train_loader = DataLoader(
-        train_data, batch_size=batch_size, shuffle=True, num_workers=8,
-        persistent_workers=True, worker_init_fn=worker_init_fn, pin_memory=True
+        train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+        persistent_workers=num_workers > 0,
+        worker_init_fn=worker_init_fn if num_workers > 0 else None,
+        pin_memory=True
     )
     valid_loader = DataLoader(
-        valid_data, batch_size=batch_size, shuffle=False, num_workers=8,
-        persistent_workers=True, worker_init_fn=worker_init_fn, pin_memory=True
+        valid_data, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+        persistent_workers=num_workers > 0,
+        worker_init_fn=worker_init_fn if num_workers > 0 else None,
+        pin_memory=True
     )
-    train(train_loader, valid_loader, epoches=5, lr=1e-3, loss_weights=weights)
+    train(
+        train_loader,
+        valid_loader,
+        epoches=epoches,
+        lr=1e-3,
+        loss_weights=weights,
+        run_metadata={
+            'dataset_schema': schema,
+            'data_root': str(data_root) if data_root is not None else None,
+            'image_size': list(data.image_size),
+            'available_files': len(hdf5_paths),
+            'sample_count': len(data),
+            'batch_size': batch_size,
+            'num_workers': num_workers,
+            'seed': seed,
+        },
+    )
 
 if __name__ == '__main__':
     import argparse
@@ -164,6 +202,30 @@ if __name__ == '__main__':
         default='original',
         help='Encoder implementation; original preserves the baseline path.',
     )
+    parser.add_argument(
+        '--schema',
+        choices=tuple(DATASET_SCHEMAS),
+        default='legacy_contact_gs',
+        help='Encoder HDF5 schema; legacy default preserves the old data layout.',
+    )
+    parser.add_argument(
+        '--data_root',
+        type=Path,
+        default=None,
+        help='HDF5 root. For gsmini this is a directory containing *.hdf5 files.',
+    )
+    parser.add_argument(
+        '--image_size',
+        type=int,
+        nargs=2,
+        default=None,
+        metavar=('HEIGHT', 'WIDTH'),
+        help='Override image/depth target size; gsmini defaults to 256 256.',
+    )
+    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--seed', type=int, default=42)
     args = parser.parse_args()
 
     backbone = 'resnet18'
@@ -205,4 +267,12 @@ if __name__ == '__main__':
             'marker': 0.5,
             'pose': 0.5
         }
-    main()
+    main(
+        schema=args.schema,
+        data_root=args.data_root,
+        image_size=tuple(args.image_size) if args.image_size is not None else None,
+        epoches=args.epochs,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        seed=args.seed,
+    )
