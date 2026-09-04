@@ -528,3 +528,22 @@ CUDA_VISIBLE_DEVICES=2 \
 ### 回退方法
 
 本次没有持久化模型/数据文件，也没有产生需删除的服务器 artifact。代码回退点仍为 `c692392`；结果记录可通过 Git revert 回退日志 commit。
+
+## 2026-09-04 16:50 +08:00：Policy encoder checkpoint loader 集成验证
+
+### 验证方法
+
+使用 details 现有非空 checkpoint：
+
+`/usr1/home/s126mdg41_04/UniVTAC details/checkpoints/encoder.pth`
+
+只读构造 `TactileBackbone(tactile_encoder_type="original", tactile_type="feat")`，由 policy-side adapter 实际执行 `torch.load(..., weights_only=True)` 与 `load_state_dict(strict=True)`，随后用 `[1,3,256,256]` dummy tactile image 做 forward。
+
+### 结果
+
+- loader 输出：`<All keys matched successfully>`。
+- feature shape：`[1,512,1,1]`。
+- position shape：`[1,512,1,1]`。
+- 输出：`POLICY_ENCODER_CHECKPOINT_LOAD_PASSED`。
+
+该验证没有写入或覆盖 checkpoint；`checkpoints/encoder.pth` 仍由 `.gitignore` 排除，不上传到 DT。V1 checkpoint 尚未产生，因为真实 encoder training 被上一节记录的数据入口不匹配阻塞。
