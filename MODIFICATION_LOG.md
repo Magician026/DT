@@ -843,3 +843,81 @@ ACT 所需的 `data/sim-insert_HDMI/demo-50` 已确认存在于原始 UniVTAC �
 
 - 训练结果是新增独立目录；失败或不采用时保留 checkpoint 和日志，不删除文件。
 - 代码回退参照为 `6cf02b6` 之前的稳定 details commit；本轮无代码改动，不需要 reset/clean。
+
+## 2026-09-04 18:10–18:27 +08:00：Insert HDMI Original/V1 encoder 正式 60-epoch 训练完成
+
+### 当前 Git branch / commit
+
+- branch：`exp/detail-preserving-v1`
+- 代码 commit：`4f907780d569ef50f85532a6f1c8b04812dd0`（训练期间未修改代码）
+
+### 修改目标与 hypothesis
+
+在用户确认的 1-epoch、batch size 32 显存预检查通过后，使用用户记忆中的正式训练规模（60 epochs、batch size 32）重新成对训练 Original 与 Detail V1，检验两种 representation 在 Insert HDMI tactile reconstruction 上的差异，并为同一 ACT policy 对比准备 checkpoint。
+
+### 训练前显存预检查
+
+- 预检查：Original/V1，各 1 epoch、batch size 32、`num_workers=8`、seed 42。
+- GPU0：启动前约 `24,230 MiB` free；GPU1：启动前约 `24,229 MiB` free。
+- GPU2/3 有其他用户任务，未使用、未 kill。
+- 结果：两条预检查均完成，无 OOM/NaN；预检查验证 loss 为 Original `0.093357`、V1 `0.100198`。预检查 checkpoint 保留在 `20260904-180923/`，未删除。
+
+### 正式训练配置 / command
+
+- task：Insert HDMI；数据 schema `gsmini`；数据根目录 `../data/insert_HDMI/clean`；1000 samples；RGB/depth target `256×256`；seed `42`。
+- 共同设置：60 epochs、batch size 32、`num_workers=8`、lr `1e-3`、loss weights `marked_rgb=1.0`、`rgb=1.0`、`depth=0.5`、`marker=0.5`、`pose=0.5`。
+- Original：
+  `CUDA_VISIBLE_DEVICES=0 ... train.py all 1000 --encoder_type original --schema gsmini --data_root ../data/insert_HDMI/clean --epochs 60 --batch_size 32 --num_workers 8 --seed 42`
+- Detail V1：
+  `CUDA_VISIBLE_DEVICES=1 ... train.py all 1000 --encoder_type detail_v1 --schema gsmini --data_root ../data/insert_HDMI/clean --epochs 60 --batch_size 32 --num_workers 8 --seed 42`
+- 启动时 GPU0/GPU1 均无 compute process；运行峰值约 GPU0 `20,062 MiB used / 4,184 MiB free`、GPU1 `20,119 MiB used / 4,128 MiB free`。GPU2/3 持续为其他用户任务，未触碰。
+
+### checkpoint / 结果
+
+- Original checkpoint：`encoder/ablation/data_1000/resnet18/20260904-181027/best.pth`
+  - SHA256：`25b9460d05f94fa0a32e903b4568afafd3b581e608966851f1686ec5c6d1ada9`
+  - best validation reconstruction loss：`0.000815`
+- Detail V1 checkpoint：`encoder/ablation/data_1000/detail_v1/resnet18/20260904-181027/best.pth`
+  - SHA256：`879de9e774fe1e66bf98eafa78fdd3be6f449e8f70253720dd69b3e8b560de22`
+  - best validation reconstruction loss：`0.001323`
+- 两条训练均跑完 epoch 60，无 OOM、NaN、Traceback；正式重建指标上本轮 V1 暂未优于 Original。
+
+### 接口 / checkpoint compatibility
+
+- Original/V1 均使用完整 supervision decoder 配置并以 `strict=True` 加载通过；没有使用 `strict=False` 静默忽略 key。
+- 参数量：Original `41,339,340`；Detail V1 `41,750,220`。
+- 输入、512-D latent 和 decoder interface 均未改变；policy architecture 尚未改变。
+
+### 当前判断与局限
+
+本轮支持“V1 可稳定训练且可被下游加载”，但不支持“V1 已改善 reconstruction”的结论；V1 的验证 loss 高于 Original。由于研究 hypothesis 关注 manipulation-relevant detail，下一步仍需在同一 Insert HDMI ACT 数据、同一 policy architecture、同一训练预算下做 downstream 对比。
+
+## 2026-09-04 18:28 +08:00：启动 policy training 前的 modification / rollback plan
+
+### 修改目标
+
+用正式 60-epoch encoder best checkpoint，分别训练 Original/V1 的同配置 ACT policy，保持 policy architecture、Insert HDMI demo-50 数据、camera/tactile 输入、seed 和 `num_steps=4000` 一致。该实验用于检验 encoder detail preservation 是否能转化为 manipulation policy 改善。
+
+### 准备修改的文件
+
+- 新增 `policy/ACT/train_config_insert_HDMI_original_60ep.yml`。
+- 新增 `policy/ACT/train_config_insert_HDMI_detail_v1_60ep.yml`。
+- 继续使用已存在的 `policy/ACT/SIM_TASK_CONFIGS.json`，不复制或修改原始 ACT 数据。
+- 更新本日志记录 command、GPU、checkpoint、policy 结果；不提交 checkpoint、dataset、large logs 或 cache。
+
+### policy 配置与接口
+
+- task：`sim-insert_HDMI-demo-50`；episodes：50；`cam_high`、`tac_left`、`tac_right`；tactile type：`feat`；state/action dim：8。
+- Original config 的 `tactile_encoder_type=original`，V1 config 的 `tactile_encoder_type=detail_v1`；各自严格加载对应正式 encoder best checkpoint。
+- 两者使用相同 ACT architecture 和训练预算：`num_steps=4000`、`save_freq=1000`、同一 YAML 其他超参数；初始保持现有 batch size `64`。若 policy batch64 OOM，只允许将两者共同降到同一较小 batch size，并记录为资源修正，不能只修改一方。
+- 两个 policy 输出放在新的、互不覆盖的目录；不覆盖原始项目已有 ACT checkpoint。
+
+### rollback plan
+
+- 当前稳定代码参照：`4f907780d569ef50f85532a6f1c8b04812dd0`；本次配置/日志修改使用当前 branch 的后续独立 commit。
+- 失败时保留 policy checkpoint 和日志，通过文件级 `git revert <policy-config-commit>` 回退配置/日志；不删除服务器文件，不 reset/clean，不覆盖 encoder checkpoint。
+- baseline 始终由 `encoder_type=original` 和独立 Original policy 输出目录保留；V1 失败不会影响 Original。
+
+### 验证门槛
+
+先做 policy-side strict load 与 tactile backbone forward/backward smoke；随后重新 `nvidia-smi`，在不影响 GPU2/3 其他任务的前提下启动 Original/V1 policy。正式 evaluation 前再次完整阅读 `/usr1/home/s126mdg41_04/UniVTAC/eval/lift_bottle_official_univtac_eval.md`，并将已验证流程中的 task/checkpoint 参数替换为 Insert HDMI。
