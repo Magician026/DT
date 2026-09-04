@@ -1,0 +1,488 @@
+# UniVTAC details 实验修改日志
+
+本日志只记录 `/usr1/home/s126mdg41_04/UniVTAC details` 内的实验性开发。原始参考项目 `/usr1/home/s126mdg41_04/UniVTAC` 不属于本仓库的修改范围；除非得到明确授权，本项目不在原始项目中写入代码、不删除服务器文件、不覆盖 checkpoint、不清理工作树、不 force push。
+
+## 2026-09-04 16:15 +08:00：Phase 0–5 调查、架构分析与 V1 计划
+
+### 当前 Git branch
+
+- 调查开始时为 `main`。
+- 当前稳定基线 commit：`05bcd3edb92237107efa40105292a24f1a9fd761`（`fix installation typo`）。
+- 计划建立实验 branch：`exp/detail-preserving-v1`。
+
+### 当前 commit
+
+`05bcd3e`，与当前 details 仓库的 `origin/main` 一致。
+
+### 环境与 Git 范围检查
+
+- SSH 别名 `mlda2` 当前连接到主机 `gpu41`，用户为 `s126mdg41_04`。
+- 实际开发目录：`/usr1/home/s126mdg41_04/UniVTAC details`。
+- `git rev-parse --show-toplevel` 确认 Git 根目录就是上述 details 目录，没有越界到其父目录。
+- details 已是独立 Git repository；现有 `origin` 是 `https://github.com/univtac/UniVTAC.git`，不是实验仓库 DT。
+- GitHub `https://github.com/Magician026/DT.git` 的 `HEAD`、`main`、`master` 和 tags 查询均没有返回 ref；当前未发现可覆盖的远程历史。
+- 调查时工作树已有、且不是本轮产生的状态：约 2441 个 tracked deletion，以及 4 个 untracked 项：`.eval_deps/`、`checkpoints/`、`eval/`、`policy/ACT/SIM_TASK_CONFIGS.json`。本轮没有执行 `git reset --hard`、`git clean`、恢复/删除文件或覆盖这些内容。
+- details 当前缺少工作树中的 ACT 源文件（例如 `policy/ACT/act_policy.py`、`policy/ACT/detr/models/backbone.py`、`scripts/eval_policy.py`），但这些文件仍在 Git HEAD 或原始项目中。这个现状必须保留并在 policy 集成前显式处理；不能借机恢复整个原始仓库或修改原始目录。
+
+### 修改目标
+
+在保持现有 encoder 输入/输出与 downstream latent 接口的前提下，先实现可解释、最小的 `Detail-Preserving Encoder V1`，验证中层空间细节是否比单一路径 GAP/fc 表征更有利于 tactile reconstruction 和 manipulation policy。
+
+### 修改原因 / hypothesis
+
+当前 ResNet-18 在早期下采样并在 `avgpool -> fc` 中压缩为 `[B,512]`。该过程可能丢失 contact boundary、局部 deformation、shear、marker displacement 和 small contact region 的位置信息。V1 只改变 representation：保留一个中层高分辨率 detail branch，并与深层 semantic branch 融合；不引入 temporal module、频域模块、额外 detail loss、decoder 改造或 policy architecture 改造。
+
+### 修改前网络结构
+
+当前实现位置：
+
+- 训练 encoder：`encoder/network.py` 的 `Tactile`。
+- 训练入口：`encoder/train.py`。
+- 训练数据：`encoder/dataloader.py`，读取 HDF5 的 tactile RGB/marked RGB、depth、marker、pose 等字段。
+- policy-side tactile loader（参考原始项目）：`policy/ACT/detr/models/backbone.py` 的 `TactileBackbone`。
+
+实际 `Tactile` 代码使用 `torchvision.models.resnet18/34/50(num_classes=latent_dims)`。当前 V1 的基线是 ResNet-18、`latent_dims=512`，没有传入 `weights` 或 `pretrained`，因此该 encoder 构造本身是随机初始化，不是 ImageNet pretrained。训练时可选的 decoder 为 RGB/marked RGB、depth、marker、pose。
+
+对 ResNet-18 的实际 forward smoke 检查结果如下：
+
+| 输入（经过代码中的 transform） | conv1 | maxpool/layer1 | layer2 | layer3 | layer4 | avgpool | fc 输出 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `[1,3,320,240]` | `[1,64,160,120]` | `[1,64,80,60]` | `[1,128,40,30]` | `[1,256,20,15]` | `[1,512,10,8]` | `[1,512,1,1]` | `[1,512]` |
+| `[1,3,256,256]` | `[1,64,128,128]` | `[1,64,64,64]` | `[1,128,32,32]` | `[1,256,16,16]` | `[1,512,8,8]` | `[1,512,1,1]` | `[1,512]` |
+
+- encoder 训练 dataloader 的实际输出 tactile tensor 是 `[B,3,320,240]`；policy dataloader/deployment 将 tactile RGB resize 为 `[B,3,256,256]`。
+- 当前 baseline ResNet-18 backbone 参数量为 `11,439,168`。
+- 当前 `encoder.pth` 对全量五类 decoder 的 `Tactile` 参数量为 `41,339,340`；该 checkpoint 的 247 个 key 已通过 `strict=True` 全部加载。
+- `RGBDecoder` 的输入接口是 `[B,512]`，并通过 `Linear(512,256*8*8)` 解码；marker head 输出 `[B,63,2]`，pose head 输出 `[B,7]`。因此只要 latent 仍为 `[B,512]`，这些 decoder 不需要改。
+
+### 下游 policy 接口与实际调用
+
+- ACT 的 `TactileBackbone` 构造一个带 `FrozenBatchNorm2d` 的 ResNet-18，并尝试从配置的 `tactile_ckpt` 加载；当前配置声明的相对路径 `encoder/checkpoints/resnet18/20251128-125750/best.pth` 在 details 和原始项目中都不存在，当前代码对缺失路径静默跳过。
+- 官方 ACT 配置没有 `tactile_type`，`build_tactile_backbone` 因此默认 `feat`：使用 ResNet `fc` 输出 `[N,512]`，再 reshape 为 `[N,512,1,1]` 并送入 `tactile_input_proj`。
+- 单独的 `train_config_tactile_full.yml` 使用 `tactile_type: full`，通过 `IntermediateLayerGetter` 暴露 layer4，256×256 policy 输入时为 `[N,512,8,8]`；这不是官方默认 eval 配置，但属于需要保留的现有接口。
+- ACT 官方 policy checkpoint 是一个 449-key state dict，包含 103 个 `model.backbones.1.*` tactile-backbone keys；当前官方 eval 加载的是 policy checkpoint 自身的完整权重，而不是上面那个不存在的独立 `tactile_ckpt`。
+- DETR/ACT 的 `tactile_input_proj` 只要求 512-channel feature map；因此 V1 在 policy side 需要显式提供同样的 `feat -> [N,512,1,1]` 适配，不能把一个只会返回 ResNet module 的自定义类直接交给当前 `IntermediateLayerGetter`。
+- 当前 details 工作树缺少 ACT source 的大部分文件。policy 集成前只允许在 details 内采取最小 overlay/新增文件方案，不能修改原始 `/UniVTAC`，也不能恢复并上传整个原始仓库。
+
+### 修改前 checkpoint / baseline 记录
+
+- details `checkpoints/encoder.pth` 与原始项目 `checkpoints/encoder.pth` 内容一致；大小均为 165,482,707 bytes，当前 encoder strict load 全部匹配。
+- 原始项目已有 local ACT baseline：
+  `/usr1/home/s126mdg41_04/UniVTAC/policy/ACT/act_ckpt/act-lift_bottle/demo-50/train_config/policy_last.ckpt`。
+- 官方 UniVTAC lift_bottle checkpoint：
+  `/usr1/home/s126mdg41_04/UniVTAC/policy/ACT/act_ckpt/act-lift_bottle/demo-50/train_config_official_univtac/policy_last.ckpt`，官方文档记录 SHA-256 为 `a6d5d8c0513357fdbafa1cc658cde03770d434a0dd08993697203e89b0f5d14a`。
+- 官方 stats：同目录 `dataset_stats.pkl`，官方文档记录 SHA-256 为 `d0839807c19dadac83188ad8f451d29e1b6b8a9c4212ccf002859f57b3f1af36`。
+- 官方文档中的 local baseline policy checkpoint SHA-256 为 `6cedd68d26b4facfd5f04d13779ef2c18bcbebb7481412bd8a7d73782c94a012`；在正式对比前仍需按文档重新执行 hash preflight，不能把不同 config 的结果混为 baseline。
+- 当前已有的 eval 不是本轮启动：GPU0 上 PID `929110` 正运行 `TRAIN_CONFIG=train_config_univtac_latest` 的 lift_bottle ACT eval；截至调查时最新结果目录 `eval_result/ACT/lift_bottle/deploy/2026-09-04_15:50:11` 为 18 个 seed 中 14 成功（77.78%），仍在运行。该结果不能标为 official checkpoint 的最终 baseline。
+
+### 官方 eval 文档与必须规避的坑
+
+已完整阅读原始项目的 248 行文档：
+`/usr1/home/s126mdg41_04/UniVTAC/eval/lift_bottle_official_univtac_eval.md`；details 下的同名副本当前内容一致。
+
+后续正式 eval 必须遵循：
+
+1. 从项目 root 执行 `sha256sum` 和 `test -s`，区分 official checkpoint、local baseline、trained policy 以及 stats。
+2. 先激活 `UniVTAC` Conda，再 `source isaacsim-4.5.0/setup_conda_env.sh`，让 Conda 的 `libstdc++.so.6` 优先；不要直接用 Conda env Python 作为 Isaac eval entry point，使用 Isaac Kit Python。
+3. Isaac Kit Python 已有针对性的 `scikit-image`、`imageio-ffmpeg` 修复；需确认 `torch_scatter`、`skimage`、`ffmpeg`，不进行 broad pip upgrade。
+4. 启动前用 `ps` 和 `nvidia-smi` 检查运行状态、checkpoint、环境变量、GPU；不要用会匹配 launcher 自身的 `pgrep -f` 模式。
+5. 评估选择真正空闲 GPU；绝不 kill 他人进程。调查时 GPU 状态为：GPU0 已用约 9663/24564 MiB、利用率 54%，GPU1/2/3 分别约 18/23/16 MiB，后续启动前仍需重新检查。
+6. 保留官方 `scripts/eval_policy.py lift_bottle demo ACT/deploy --headless --total_num 100` 流程和 seed 约定；结果目录、`log.log`、metadata/video 路径按文档记录。
+
+### 准备改哪些文件
+
+正式 V1 architecture modification 前，预期只在 details 内新增或修改：
+
+- `encoder/network.py`：保留原始实现，增加 `OriginalUniVTACEncoder` / `DetailPreservingEncoderV1` 和明确的 encoder factory/switch；外层 `Tactile` 维持现有 decoder 接口。
+- `encoder/train.py` 或新增轻量 config/entry：增加 `encoder_type: original|detail_v1`，默认仍为 `original`；修复/增加的参数必须保持 baseline 命令可追踪。
+- `tests/` 或 `encoder/tests/`：增加 import、forward shape、backward、checkpoint load 的 smoke test；不触碰数据、checkpoint、eval_result。
+- policy-side 只在确定 details 内的最小 source overlay 后再改；首选新增可测试 adapter，不改 decoder/ACT transformer/policy architecture。
+- `.gitignore`：仅在确认当前 untracked 大文件/运行产物范围后，增加必要的 checkpoint、cache、log、video 忽略规则；不改变或删除已有用户文件。
+
+### 设计中的修改后网络结构（Detail-Preserving V1）
+
+输入保持 RGB、外层调用保持 `[B,3,H,W]`。
+
+```text
+ResNet-18 shared trunk
+       |-----------------------------|
+       v                             v
+     layer2                         layer4
+ [B,128,H/8,W/8]              [B,512,H/32,W/32]
+       |                             |
+  1x1 Conv projection             GAP
+       |                             |
+  AdaptiveAvgPool(4,4)         Linear(512,256)
+       |                             |
+  Flatten -> Linear(...,256)  z_semantic [B,256]
+       |                             |
+  z_detail [B,256]                  |
+       |____________ concat ________|
+                    v
+             z [B,512]
+```
+
+- 第一版固定从 layer2 取 detail，从 layer4 取 semantic；不改 conv1/maxpool/stride，不引入 dilation。
+- detail 分支保留 4×4 粗空间布局，不做直接 GAP；semantic 分支保留现有深层语义聚合。
+- `z_detail=256`、`z_semantic=256`，直接 concat 为 `[B,512]`；如实现需要 LayerNorm/最终 Linear，必须记录额外参数并保持 latent 维度不变。
+- 默认新 encoder 不新增 auxiliary loss；现有 RGB/marked RGB/depth/marker/pose decoder 继续接收 512-D latent。
+- 第一轮只改变 encoder representation；Experiment B 的 reduced early downsampling、Experiment C 的 dilation/high-resolution deep feature、未来 detail supervision 均另开逻辑 commit，不与 V1 混合。
+
+### 是否改变 encoder 输入输出接口
+
+不改变：输入仍为 `[B,3,H,W]`，V1 输出仍为 `[B,512]`；encoder training 的 reconstruction decoder、ACT policy 的 `feat` adapter 和现有 latent consumer 必须保持兼容。`full` 模式若保留，必须通过显式 adapter 定义其 feature-map 输出，而不是改变默认 policy 接口。
+
+### checkpoint compatibility
+
+- `encoder_type=original` 必须继续严格加载旧 `encoder.pth`；V1 不得把旧 checkpoint 以 `strict=False` 静默吞掉。
+- V1 的新 projection/MLP 参数无法从旧 ResNet checkpoint 直接得到；加载旧 checkpoint 时必须打印并记录 missing/unexpected keys、成功加载的 shared ResNet keys、随机初始化的新增 keys。
+- 旧 ACT policy checkpoint 只与原始 `model.backbones.1.backbone.*` 结构直接兼容；V1 policy 必须重新构造并重新训练/保存。若尝试 warm-start，必须显式核对 key mapping 和 load status，禁止全局 `strict=False`。
+- 旧 baseline checkpoint、数据、eval_result 不覆盖、不移动、不删除。
+
+### Rollback plan
+
+1. 稳定基线是 `main` 的 `05bcd3e`；实验在 `exp/detail-preserving-v1`，不直接在 main 上开发。
+2. 建 branch 时保留当前工作树原有的 2441 个 deletion 和 4 个 untracked 状态，不对它们做恢复/清理；本实验只 stage 自己明确新增/修改的文件。
+3. V1 失败时保留失败 commit 作为 negative-result 记录；回退 baseline 使用 branch 指针/commit 对比，或新建 revert commit，不 rewrite history。
+4. 任何涉及 policy-side source materialization、路径重定向或 checkpoint copy 的动作只在 details 内执行；若需要修改原始项目、删除/覆盖文件、恢复整棵缺失源码树，先停止并征求用户意见。
+5. push 只推送 details repository 的实验 branch，先配置单独的 DT remote（保留原 `origin`），普通 push，不 force push、不删除远程 branch。
+
+### 验证方法
+
+正式 V1 实现后按顺序：
+
+1. import test；
+2. original dummy forward，确认 `[B,512]`；
+3. detail_v1 dummy forward，确认 `[B,512]`；
+4. backward/gradient finite；
+5. original checkpoint strict load；
+6. V1 checkpoint save/reload，并检查 missing/unexpected keys；
+7. 只在 GPU 检查后选择剩余显存大于 12 GB 的 GPU做极短训练 smoke test，记录 GPU ID、显存、command、config、checkpoint；
+8. smoke test 全部通过后才讨论 full encoder training、同架构 policy training 和 official eval。
+
+### 使用的训练 / eval command
+
+本调查阶段未启动训练、未启动新的 evaluation。已记录官方 eval 命令，但正式 eval 前必须再次完整阅读上述官方文档并重新做 preflight。
+
+### 使用的 GPU
+
+调查阶段未占用 GPU 运行实验。只读检查时：GPU0 约 9663/24564 MiB 且已有他人/既有任务 PID 929110；GPU1/2/3 约 18/23/16 MiB。后续短训练需重新执行 `nvidia-smi`，正式 eval 需选择真正空闲卡。
+
+### 实验结果
+
+本阶段无新实验结果。已确认 baseline/official eval 现有运行不能与未来 V1 结果混淆。
+
+### 存在的问题
+
+- details 工作树预先存在大规模 deletion/untracked 状态，必须避免任何会隐式恢复、清理或覆盖的 Git 命令。
+- details 缺少大部分 ACT policy/eval source，V1 policy 集成尚未执行；必须设计最小 details 内 overlay，不能修改原始项目。
+- 配置中的独立 `tactile_ckpt` 路径缺失；未来训练命令必须明确给出实际 checkpoint 路径，并在日志中记录实际是否加载。
+- 现有 GPU0 eval 正在运行，不能占用或终止；其结果不是本轮 V1 baseline。
+
+### 回退方法
+
+见本条目的 Rollback plan。当前尚未写入 architecture code，因此恢复当前实现只需保持 `main@05bcd3e` 和未触碰的原有工作树状态。
+
+### 下一步计划
+
+1. 在不触碰原有 dirty 文件的情况下建立 `exp/detail-preserving-v1`。
+2. 提交仅包含本日志的 docs commit，验证 staged path 不包含 deletion、checkpoint、dataset、eval_result 或其他 untracked 产物。
+3. 再实现最小 V1 encoder 与 tests；保持 Original/V1 switch 和 512-D latent。
+4. 完成 smoke test 后，再决定 policy-side adapter 的最小 materialization 方案，并在任何 policy training 前重新检查 GPU 与 official eval 文档。
+
+## 2026-09-04 16:23 +08:00：Phase 7–8 Detail-Preserving Encoder V1 实现与 smoke test
+
+### 当前 Git branch
+
+`exp/detail-preserving-v1`。
+
+### 当前 commit
+
+当前 HEAD：`392c423`。
+
+- `786750b docs: add UniVTAC modification log`
+- `a7b3ede feat: add configurable detail-preserving encoder v1`
+- `392c423 test: add encoder forward-shape smoke test`
+
+### 修改目标
+
+在不改变原始 encoder 默认行为和 512-D latent 接口的前提下，落地第一版 multi-scale spatial-detail representation，并建立可重复的最小验证入口。
+
+### 修改前网络结构
+
+Original 模式保持 torchvision ResNet-18 的 `backbone.*` state-dict 命名、early downsampling、`avgpool -> fc -> [B,512]` 路径和现有 decoder 调用方式。
+
+### 修改后网络结构
+
+- 新增 `DetailPreservingEncoderV1`，共享 ResNet-18 convolutional trunk。
+- detail：`layer2 [B,128,H/8,W/8] -> 1x1 Conv(128->128) -> norm/GELU -> AdaptiveAvgPool(4,4) -> Linear(2048->256) -> LayerNorm/GELU`。
+- semantic：`layer4 [B,512,H/32,W/32] -> GAP -> Linear(512->256) -> LayerNorm/GELU`。
+- fusion：`concat(z_semantic, z_detail) -> [B,512]`。
+- V1 不使用 ResNet 原始 fc；不改 conv1/maxpool stride、不改 decoder、不改 ACT/Transformer、不加 temporal/dilation/auxiliary loss。
+- `Tactile(..., encoder_type='original'|'detail_v1')` 提供明确 switch；`encoder/train.py` 增加 `--encoder_type`，默认 `original`，旧 positional 命令仍可用。
+
+### 修改的文件
+
+- `encoder/network.py`
+- `encoder/train.py`
+- `encoder/smoke_test.py`
+
+### 是否改变 encoder 输入输出接口
+
+没有改变：Original 与 V1 都接收 `[B,3,H,W]` 并输出 `[B,512]`。现有 RGB/marked RGB/depth/marker/pose decoder 未改。
+
+### checkpoint compatibility
+
+- Original `Tactile` state-dict 结构保持兼容；调查/测试中 `checkpoints/encoder.pth` 用 `strict=True` 加载，247 keys 全部匹配。
+- V1 的新增 `trunk`、detail projection/head、semantic head 是新参数，旧 checkpoint 不会自动映射；V1 checkpoint 需要重新训练或显式 key mapping，不能用全局 `strict=False` 隐藏问题。
+- V1 的内存序列化 reload 用 `strict=True` 通过；未创建或覆盖服务器上的 checkpoint 文件。
+- 旧 ACT policy checkpoint 的 103 个 tactile-backbone keys 仍只匹配原始 policy-side ResNet；policy-side V1 adapter 尚未实现。
+
+### 参数与预期风险
+
+CPU smoke test 测得（仅 backbone、`supervise=[]`）：
+
+- Original：`11,439,168` parameters。
+- V1：`11,850,048` parameters。
+- 增加：`410,880`，约 `3.59%`；最终训练时 decoder 参数另计。
+
+主要风险是 policy-side 当前代码期待 ResNet module/`IntermediateLayerGetter`，而 details 工作树缺少 ACT source；下一阶段必须在 details 内完成最小 adapter/overlay，并显式验证 `feat` 与可选 `full` 模式，不能修改原始 `/UniVTAC`。
+
+### 验证方法
+
+`$ISAAC/kit/python/bin/python3 encoder/smoke_test.py`（先激活 `UniVTAC` Conda 并 source Isaac Sim setup）已通过：
+
+- Original checkpoint strict load：`All keys matched successfully`。
+- Original forward：`(2,512)`。
+- V1 forward：`(2,512)`。
+- V1 layer2：`(2,128,32,32)`；layer4：`(2,512,8,8)`。
+- Original/V1 backward loss 均 finite，所有 trainable gradients finite。
+- V1 checkpoint in-memory save/reload strict：`All keys matched successfully`。
+- 最终输出：`SMOKE_TEST_PASSED`。
+- `python3 -m py_compile` 和 `git diff --check` 通过。
+
+### 使用的训练 / eval command
+
+本阶段没有启动训练或新的 eval。encoder smoke command：
+
+```bash
+BASE=/usr1/home/s126mdg41_04
+ISAAC=$BASE/isaacsim-4.5.0
+set +u
+source "$BASE/miniconda3/etc/profile.d/conda.sh"
+conda activate UniVTAC
+source "$ISAAC/setup_conda_env.sh"
+set -u
+cd "/usr1/home/s126mdg41_04/UniVTAC details"
+"$ISAAC/kit/python/bin/python3" encoder/smoke_test.py
+```
+
+### 使用的 GPU
+
+本阶段只在 CPU 做 smoke test，未占用 GPU。GPU0 上已有 PID `929110` 的 `train_config_univtac_latest` eval 未触碰；后续短训练前仍须重新执行 `nvidia-smi`，选择剩余显存大于 12 GB 且不影响他人任务的 GPU。
+
+### 实验结果
+
+这是 code/shape validation，不是 reconstruction 或 manipulation performance 结果。V1 已证明可以在 CPU 上完成 forward/backward 和 checkpoint round-trip；研究效果尚未结论化。
+
+### 回退方法
+
+- 只运行 baseline：`encoder/train.py` 不传 `--encoder_type`，或显式 `--encoder_type original`。
+- 完整代码回退：保留失败 commit，使用 `main@05bcd3e` 对比或在实验 branch 上建立 revert commit；不 reset/clean dirty worktree，不删除 checkpoint。
+
+### 下一步计划
+
+1. 在 details 内确认 policy-side 最小 adapter 的落地方式，尤其是官方默认 `feat` 的 `[N,512,1,1]` 接口和 `tactile_type: full` 的兼容性。
+2. 补充 detail decoder reconstruction smoke（只检查 shape/interface，不改 decoder）。
+3. 在开始任何 short training 前重新执行 `nvidia-smi`，选择合规 GPU，记录显存/command/config/checkpoint。
+4. policy training、正式 evaluation 前再次完整阅读官方 eval 文档；先建立 Original baseline 对照，再运行 V1。
+
+## 2026-09-04 16:25 +08:00：decoder interface smoke 补充
+
+### 当前 Git branch
+
+`exp/detail-preserving-v1`。
+
+### 当前 commit
+
+`d1adb25 test: cover decoder compatibility in encoder smoke test`。
+
+### 验证方法与结果
+
+在同一 CPU smoke test 中用 V1 的 `[1,512]` latent 调用现有五类 decoder，未修改 decoder 代码，输出 shape 全部符合原接口：
+
+- `rgb`: `[1,3,256,256]`
+- `marked_rgb`: `[1,3,256,256]`
+- `depth`: `[1,1,256,256]`
+- `marker`: `[1,63,2]`
+- `pose`: `[1,7]`
+
+输出仍为 `SMOKE_TEST_PASSED`。该验证只覆盖 encoder/decoder shape compatibility，不代表 reconstruction quality 提升。
+
+### 回退方法
+
+该 commit 只修改 `encoder/smoke_test.py`；删除其效果时使用 Git revert 或回到前一实验 commit，不删除服务器上的任何数据/checkpoint。
+
+## 2026-09-04 16:27 +08:00：GitHub 发布范围保护
+
+### 当前 Git branch
+
+`exp/detail-preserving-v1`。
+
+### 当前 commit
+
+`88e87ee chore: ignore local experiment artifacts`。
+
+### 修改目标与关键变化
+
+- 在 `.gitignore` 中新增 `/.eval_deps/` 和 `/checkpoints/`，防止 root 级环境目录与 165 MB encoder checkpoint 被误加入提交。
+- 这些服务器文件仍原样存在，没有删除、移动或覆盖。
+
+### 验证方法
+
+`git diff --check` 通过；提交 staged path 仅为 `.gitignore`。检查确认 details 下 `checkpoints/encoder.pth` 仍存在且大小为 165,482,707 bytes。
+
+### Push 约束
+
+当前 details 的本地 history 起点是完整的 upstream UniVTAC history；若直接把 `exp/detail-preserving-v1` 推到空的 `Magician026/DT`，GitHub 会接收原始仓库的历史/对象，违反本项目“不上传原始 UniVTAC 整个仓库”的约束。因此本轮不做直接 push，也不改写现有 branch/history。
+
+后续发布必须使用只包含实验性文件/修改的 patch-only orphan 发布分支或等价的无 upstream history 方案，正常 push 到 DT；先检查远程仍为空，绝不 force push。当前 `origin` 继续保留为 `https://github.com/univtac/UniVTAC.git`，未覆盖。
+
+## 2026-09-04 16:30 +08:00：Policy-side source materialization 前置记录
+
+### 当前 Git branch
+
+`exp/detail-preserving-v1`。
+
+### 当前 commit / rollback point
+
+当前稳定 rollback point：`6cfe41b`。本次 policy 集成将在其后进行；如失败，保留失败 commit，使用文件级 revert 或回到该 commit 对比，不执行 reset/clean，不删除服务器文件。
+
+### 修改目标
+
+使 details 内的 ACT training/eval pipeline 能实际调用 `encoder_type=original|detail_v1`，以便后续保持同一 ACT/Transformer policy 做公平对比。
+
+### 计划恢复的最小文件
+
+仅从原始项目复制当前 details 工作树中缺失、且 ACT 运行所需的源码/配置：
+
+- `policy/ACT/act_policy.py`
+- `policy/ACT/imitate_episodes.py`
+- `policy/ACT/utils.py`
+- `policy/ACT/detr/main.py`
+- `policy/ACT/detr/models/{__init__,backbone,detr_vae,network,position_encoding,transformer}.py`
+- `policy/ACT/detr/util/{__init__,misc}.py`
+- `policy/ACT/deploy.yml`
+- `policy/ACT/deploy_policy.py`
+- `policy/_base_policy.py`
+- `policy/task_settings.json`
+- `task_config/demo.yml`
+- `scripts/eval_policy.py`
+
+不恢复整个 `policy/`、`scripts/`、`third_party/` 或其他 2441 个 deletion；原始项目目录不写入任何内容。恢复的未修改文件只用于让 details 运行环境闭合，后续发布到 DT 时仍只选择实验性 diff/patch 文件。
+
+### V1 policy-side modification plan
+
+- 将 details 的 `policy/ACT/detr/models/network.py` 改为从 details `encoder/network.py` 复用 `Tactile`/factory，避免维护第二份 encoder 实现。
+- `TactileBackbone` 增加 `tactile_encoder_type` 配置；默认 `original`，保持旧 policy checkpoint 的原始 key layout。
+- `feat` 模式：Original 继续输出 `[N,512,1,1]`；V1 通过其 512-D latent 输出同样的 shape。
+- `full` 模式：Original 继续用 layer maps；V1 通过显式 `forward_features()` 提供 layer maps，默认选择 layer4，保持 512-channel ACT input。
+- checkpoint 加载必须显式输出 status；旧 policy checkpoint 不对 V1 静默 `strict=False`。
+- 不改 ACT Transformer、decoder、action head、temporal aggregation 或 policy architecture。
+
+### 风险与验证
+
+- 恢复文件可能使此前的 `D` 状态变为 clean，但不应 stage/commit 未修改源文件；需在恢复后用路径清单检查。
+- 先做 import test、Original policy model construction、V1 `feat/full` shape test；随后才考虑短训练。
+- 当前 GPU0 仍有既有 eval，恢复源码不启动 GPU 任务；训练前必须重新执行 `nvidia-smi`。
+
+## 2026-09-04 16:41 +08:00：Policy-side V1 adapter 与 smoke validation 完成
+
+### 当前 Git branch
+
+`exp/detail-preserving-v1`。
+
+### 当前 commit
+
+`0737aad test: add policy tactile backbone smoke test`。
+
+前置逻辑提交：
+
+- `1916061 feat: add policy tactile encoder switch`
+- `818b4bd exp: add detail v1 policy config`
+- `0737aad test: add policy tactile backbone smoke test`
+
+### 修改目标 / hypothesis
+
+使 details 内的 ACT policy 在不改变 Transformer、action head、temporal aggregation 和 decoder 接口的前提下，能够显式选择 `original` 或 `detail_v1` tactile encoder。这样后续可以用相同 policy architecture 对比 encoder representation 是否保留了更多 manipulation-relevant spatial detail。
+
+### 实际修改与源文件范围
+
+- `policy/ACT/detr/models/network.py` 改为 import shim，统一复用 `details/encoder/network.py` 中的 `Tactile` 与 encoder factory，避免 encoder pretraining 与 policy 侧维护两套实现。
+- `policy/ACT/detr/models/backbone.py` 增加 `tactile_encoder_type: original|detail_v1`；默认值为 `original`。
+- `feat` 模式中两种 encoder 均输出 `[N,512,1,1]`；`full` 模式中两种 encoder 默认输出 layer4 `[N,512,8,8]`（256×256 policy 输入）。
+- `policy/ACT/train_config_detail_v1.yml` 基于官方 ACT 配置建立，保持 policy 超参数不变，仅设置 `tactile_encoder_type: detail_v1`；`tactile_ckpt` 暂设为 `null`，待 encoder V1 正式训练产生并核验 checkpoint 后填写，避免误用不存在的旧路径。
+- `policy/ACT/tactile_backbone_smoke_test.py` 覆盖 Original/V1、feat/full、旧 policy tactile state key/shape 和 V1 strict reload。
+
+此前按授权从 Original 项目复制到 details 的 ACT 最小源文件均使用 `cp -p`，逐个通过 `cmp` 与原文件核对；没有修改 Original 项目，也没有恢复整个缺失的 policy/scripts 树。已有的 checkpoint、dataset、eval 文件和其余历史 deletion 均未删除、清理或加入本次提交。
+
+### 是否改变 encoder 输入输出接口
+
+没有改变 encoder 输入 `[N,3,H,W]` 或 latent `[N,512]` 接口。decoder 仍接收 `[N,512]`。ACT 的 `feat`/`full` 外部 feature 接口保持原样。
+
+### Checkpoint compatibility
+
+- Original encoder checkpoint 仍由共享 `Tactile` 实现按原 state-dict layout 读取；V1 采用不同的 trunk/state keys，不对旧 encoder checkpoint 静默兼容。
+- 旧官方 policy checkpoint 的 tactile 子模块实际包含 103 个参数键；与 `original + feat` 的 policy backbone 逐键、逐 shape 比较全部通过。
+- V1 policy backbone 的内存 state dict 使用 `strict=True` 保存/重载通过。
+- checkpoint 加载路径存在时使用 `strict=True` 并打印 status；路径不存在时明确打印 `Tactile checkpoint not found`。未使用 `strict=False` 隐藏 missing/unexpected keys。
+
+### 验证方法与结果
+
+使用 Isaac Kit Python 做 CPU-only smoke test（未启动训练/eval、未占用 GPU）：
+
+```bash
+BASE=/usr1/home/s126mdg41_04
+ISAAC=$BASE/isaacsim-4.5.0
+set +u
+source "$BASE/miniconda3/etc/profile.d/conda.sh"
+conda activate UniVTAC
+source "$ISAAC/setup_conda_env.sh"
+set -u
+cd "$BASE/UniVTAC details"
+"$ISAAC/kit/python/bin/python3" policy/ACT/tactile_backbone_smoke_test.py
+```
+
+结果：
+
+- `original/feat`: feature `[2,512,1,1]`，position `[1,512,1,1]`
+- `detail_v1/feat`: feature `[2,512,1,1]`，position `[1,512,1,1]`
+- `original/full`: feature `[2,512,8,8]`，position `[1,512,8,8]`
+- `detail_v1/full`: feature `[2,512,8,8]`，position `[1,512,8,8]`
+- 原有 policy checkpoint tactile key/shape compatibility：`103 keys` 全部通过
+- V1 policy checkpoint reload：`<All keys matched successfully>`
+- 最终输出：`POLICY_SMOKE_TEST_PASSED`
+
+其中 position batch 维为 1 是当前 UniVTAC `PositionEmbeddingSine` 的既有实现，ACT 通过广播使用；测试已按实际接口记录，未擅自修改 position encoding。
+
+### GPU / 训练与 eval 状态
+
+本次为 CPU-only code validation，GPU 记为 `N/A`；没有运行训练或 evaluation。此前 GPU0 上已有他人/既有 eval 进程，本次未触碰。任何 short training 或 official eval 开始前必须重新执行 `nvidia-smi`，按本日志前述规则重新选择 GPU，并记录当时剩余显存。
+
+### 存在的问题
+
+当前 details 工作树在本任务开始前就存在大量 tracked deletion 及若干 untracked 数据/结果目录；本次没有清理或恢复这些无关内容。Git 提交只包含上述 policy 适配、V1 配置和 smoke test，未包含 checkpoint 或数据。
+
+### 回退方法
+
+- 回退 policy 适配：对 `1916061` 使用 Git revert，或切换到前一 commit；不执行 reset/clean。
+- 回退 V1 policy 配置：对 `818b4bd` 使用 Git revert。
+- 回退 smoke test：对 `0737aad` 使用 Git revert。
+- 保留并可对照的稳定点为 `c692392`；Original baseline 仍可显式使用 `encoder_type=original`，不依赖 Git 回退。
+
+### 下一步计划
+
+1. 在正式训练前核对 encoder training 的工作目录、输出路径和实际 checkpoint 格式。
+2. 先运行 `nvidia-smi`，做合规的极短 baseline/V1 training smoke，记录 GPU、显存、config 和 checkpoint。
+3. 通过 smoke 后再分别进行 baseline 与 V1 encoder training；policy architecture 保持不变。
+4. policy training 与 official evaluation 前再次完整阅读官方 eval 文档，并严格复用其中的环境、checkpoint、simulator、seed 和 episode 设置。
