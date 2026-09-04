@@ -947,3 +947,42 @@ ACT 所需的 `data/sim-insert_HDMI/demo-50` 已确认存在于原始 UniVTAC �
 
 - 可通过文件级 revert 本次配置修正 commit；保留首次失败日志和所有 encoder/policy 输出目录。
 - 不删除失败日志、checkpoint、数据或 output directory；重新启动使用独立的同名实验目录，仅在确认目录为空的情况下运行。
+
+## 2026-09-04 18:34–19:05 +08:00：Insert HDMI Original/V1 ACT policy 训练完成
+
+### 实验配置
+
+- branch：`exp/detail-preserving-v1`
+- config commit：`40a561d`；对应 DT `main` 已正常 push 至 `532b629`。
+- task：`sim-insert_HDMI-demo-50`；原始 ACT 数据只读引用 `/usr1/home/s126mdg41_04/UniVTAC/policy/ACT/data/sim-insert_HDMI/demo-50`；50 episodes；`cam_high`、`tac_left`、`tac_right`；state/action dim 8。
+- ACT architecture 与训练预算保持一致：`policy_class=ACT`、`tactile_type=feat`、`num_steps=4000`、`save_freq=1000`、batch size 64、seed 42、其余 YAML 超参数相同。
+- Original 使用 `tactile_encoder_type=original`；Detail V1 使用 `tactile_encoder_type=detail_v1`；各自加载对应正式 60-epoch encoder best checkpoint。
+
+### GPU / command
+
+- 启动前重新执行 `nvidia-smi`：GPU0 约 `24,230 MiB free`、GPU1 约 `24,229 MiB free`，仅有桌面进程；GPU2/3 各由其他用户任务占用约 10.7–10.8 GiB，未触碰。
+- Original：物理 GPU0，输出 `policy/ACT/ablation/insert_HDMI_original_encoder60_policy4000_seed42/`，日志 `policy/ACT/training_logs/policy_insert_HDMI_original_encoder60_policy4000_seed42.log`。
+- Detail V1：物理 GPU1，输出 `policy/ACT/ablation/insert_HDMI_detail_v1_encoder60_policy4000_seed42/`，日志 `policy/ACT/training_logs/policy_insert_HDMI_detail_v1_encoder60_policy4000_seed42.log`。
+- 训练期间 GPU0 约 `8,752 MiB used / 15,494 MiB free`，GPU1 约 `9,137 MiB used / 15,110 MiB free`；无 OOM/NaN/Traceback。
+
+### 结果
+
+- Original：`val loss 0.089924 @ epoch52`；policy model 参数 `95,577,929`；`policy_best.ckpt` SHA256 `3a1f656233b79711a9b172603943a49ec01f45196c06ded920c622208f912efc`。
+- Detail V1：`val loss 0.077907 @ epoch43`；policy model 参数 `95,988,553`；`policy_best.ckpt` SHA256 `ef6a7ba9d4674c6f241de9ebf005127b6ca8d1d0bca1448ba19acc14185b36f0`。
+- 两个 policy 都生成 `policy_best.ckpt`、`policy_last.ckpt`、中间 epoch checkpoint、dataset stats 和训练曲线；大文件均只保留在服务器，没有上传 GitHub。
+- 当前 policy validation loss：V1 比 Original 低约 `13.4%`（`(0.089924-0.077907)/0.089924`）；这是 policy validation 结果，不等同于最终 manipulation success rate。
+
+### strict checkpoint 验证
+
+- 重新按各自 YAML 构建 ACT model，并将 `policy_best.ckpt` 中的 `model.` wrapper 前缀去除后使用 `strict=True` 加载，Original/V1 均通过。
+- 输出 feature/backbone 结构和 checkpoint key 均匹配；没有使用 `strict=False` 静默忽略问题。
+
+### 结果解释与限制
+
+- 本轮 encoder reconstruction validation loss：Original `0.000815`、V1 `0.001323`；但 policy validation loss：Original `0.089924`、V1 `0.077907`。这构成一个值得继续验证的分离现象：V1 没有改善当前 reconstruction loss，却在相同 ACT policy 训练设置下取得更低 validation loss。
+- 目前尚未运行 simulator official evaluation，因此不能声称 manipulation success rate 已提升。下一步应在再次完整阅读 official eval 文档后，使用真正空闲 GPU，分别加载两个 policy checkpoint，保持 Insert HDMI task、seed、episodes 和环境参数一致进行评估。
+
+### 回退方法
+
+- 保留所有 encoder/policy checkpoint 和失败日志；不删除任何服务器文件。
+- baseline 由 Original encoder/policy 独立目录保留；V1 如需弃用，只回退配置/代码 commit，不覆盖或删除 baseline。
