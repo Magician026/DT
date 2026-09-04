@@ -921,3 +921,29 @@ ACT 所需的 `data/sim-insert_HDMI/demo-50` 已确认存在于原始 UniVTAC �
 ### 验证门槛
 
 先做 policy-side strict load 与 tactile backbone forward/backward smoke；随后重新 `nvidia-smi`，在不影响 GPU2/3 其他任务的前提下启动 Original/V1 policy。正式 evaluation 前再次完整阅读 `/usr1/home/s126mdg41_04/UniVTAC/eval/lift_bottle_official_univtac_eval.md`，并将已验证流程中的 task/checkpoint 参数替换为 Insert HDMI。
+
+## 2026-09-04 18:33–18:36 +08:00：policy 首次启动失败与最小修正
+
+### 失败分类
+
+- 两个 policy 后台任务均在模型构造前退出，未进行 GPU 训练；不是 OOM、数据错误或 checkpoint 错误。
+- `imitate_episodes.py` 将配置传入 `ACTPolicy` 后，`detr/main.py` 因 `args_override` 缺少 `num_epochs`，错误进入了 DETR CLI parser，报错要求 `--policy_class`、`--num_epochs`、`--state_dim`。
+- Original 的失败日志保留在 `policy/ACT/training_logs/policy_insert_HDMI_original_encoder60_policy4000_seed42.log`；第二条因首次后台重定向竞态未生成独立日志。没有删除任何文件或覆盖 checkpoint。
+
+### 修正
+
+- 仅在本实验新增的两个 policy YAML 中补充 `num_epochs: 6000`，触发项目已有的 deployment/config override 分支；ACT 实际训练步数仍由 `num_steps: 4000` 控制。
+- 未修改 policy architecture、encoder、原始 project 文件或数据。
+- 当前环境另外补装了 `PyYAML==6.0.3` 和 `matplotlib==3.10.9`，因为 ACT 入口原先缺少这两个 import 依赖；torch、torchvision、numpy、h5py 等原有包未替换。
+- 另一个已有 smoke 脚本经 `policy.ACT` 包导入时会触发 `deploy_policy.py` 并缺少 `cv2`；已使用 ACT 训练实际的 `detr` 路径完成等价验证，没有为训练强行安装 cv2，也没有改变部署代码。
+
+### 修正后的验证
+
+- 两份 YAML 均解析通过：Original/V1、`tactile_type=feat`、batch size 64、`num_steps=4000`。
+- 两份正式 encoder checkpoint 均在 ACT `TactileBackbone` 中以 `strict=True` 加载通过。
+- CPU forward/backward：Original/V1 均输出 feature `[1,512,1,1]`、position `[1,512,1,1]`，反向传播通过。
+
+### 回退方法
+
+- 可通过文件级 revert 本次配置修正 commit；保留首次失败日志和所有 encoder/policy 输出目录。
+- 不删除失败日志、checkpoint、数据或 output directory；重新启动使用独立的同名实验目录，仅在确认目录为空的情况下运行。
