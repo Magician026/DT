@@ -1,0 +1,16 @@
+{
+  "status": "completed",
+  "run_id": "encoder_v2_seed42",
+  "source_commit": "6c79d02",
+  "encoder_type": "detail_v2",
+  "steps": 3320,
+  "best_val": 0.025028514015977665,
+  "checkpoint": "best.pt",
+  "checkpoint_sha256": "914d9d8315a8ccd7fd88ea853b20375a90010ac45968e88e9d2eb386abffe448",
+  "split_hash": "437a7bad6610b5f84888149ab6416b5f61ae1e28a5db6d2bda1e0c17aafd0e63",
+  "elapsed": 534.7774558067322,
+  "smoke": false,
+  "probe": false,
+  "overfit_first5": 1.9381581544876099,
+  "overfit_last5": 0.0233388040214777
+}

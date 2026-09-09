@@ -23,3 +23,22 @@ References: encoder server source `a9b8d3998c3106137772fa7e22741dcef9e37f76`;
 policy reference `dbb5fdc4fc270debedfaa92050ac9d505dde58a1`;
 local external simulator source `05bcd3e`. No reference server was modified.
 Historical baselines are reference, not comparable to P0.
+
+## Encoder result
+
+The formal encoder run completed from immutable source `6c79d02`: five full
+epochs, 3,320 optimizer updates, best full-validation P0 loss
+`0.025028514015977665` (epoch 3, zero-based). Encoder SHA256:
+`914d9d8315a8ccd7fd88ea853b20375a90010ac45968e88e9d2eb386abffe448`.
+See `results/encoder_v2_seed42.json` and `results/encoder_v2_curve.jsonl`.
+
+ACT real batch smoke passed with this formal encoder. Earlier batch32 ×
+accumulation2 smoke used four micro-batches for exactly two updates; peak
+allocated memory 5.65 GB. Tactile perturbation changes actual ACT action output;
+all trainable attention parameters belong to optimizer groups. The consolidated
+encoder/loader/P0/policy tests passed 27/27 on the training server.
+
+The same-data original B0 encoder has now started with the explicitly exported
+V2 trunk initialization, identical split/P0/batch/LR/five-epoch budget. This is not
+yet a downstream comparable result: policy training and simulation results are
+still required. No manipulation success rate or improvement claim is available.
