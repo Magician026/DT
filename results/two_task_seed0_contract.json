@@ -1,0 +1,15 @@
+{
+  "encoder_training_seeds": {
+    "insert_tube": 1226746006,
+    "pull_out_key": 821018648
+  },
+  "policy_training_seed": 0,
+  "encoder_split_seed": 42,
+  "policy_split_seed": 1,
+  "evaluation_seeds": [
+    1000000,
+    1000099
+  ],
+  "seed_selection": "OS entropy generated once before training; persisted, never selected by outcome",
+  "evaluation_seed_note": "100 exact seeds 1000000 through 1000099; engineering errors stop for diagnosis, never count as task failure"
+}

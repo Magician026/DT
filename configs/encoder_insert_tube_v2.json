@@ -1,0 +1,28 @@
+{
+  "task": "insert_tube",
+  "encoder_type": "detail_v2",
+  "seed": 1226746006,
+  "active_heads": [
+    "depth",
+    "marker"
+  ],
+  "weights": {
+    "depth": 1.0,
+    "marker": 1.0
+  },
+  "target_meaning": {
+    "depth": "sensor camera axial depth in mm, tactile/{side}_gsmini/depth, [240,320]",
+    "marker": "current minus initial pixel coordinates, tactile/{side}_gsmini/marker[1]-marker[0], [1200,2]"
+  },
+  "loss": "sum of mean squared errors in train-statistic normalized coordinates",
+  "normalization": "fixed train-only mean/std; statistics frame stride 10; all pixels/markers and both sensors",
+  "initialization": "random ResNet18; shared trunk initialization saved for B0",
+  "lr": 0.0001,
+  "weight_decay": 0.0001,
+  "batch_size": 32,
+  "workers": 4,
+  "frame_stride": 1,
+  "epochs": 5,
+  "checkpoint_selection": "minimum full validation P0 loss after each epoch",
+  "source_commit": "pre-M1-smoke"
+}
