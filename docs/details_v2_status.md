@@ -42,3 +42,21 @@ The same-data original B0 encoder has now started with the explicitly exported
 V2 trunk initialization, identical split/P0/batch/LR/five-epoch budget. This is not
 yet a downstream comparable result: policy training and simulation results are
 still required. No manipulation success rate or improvement claim is available.
+
+## M2 integration
+
+Simulator smoke passed with the formal V2 encoder origin: reset once at seed 0,
+three actual actions, three tactile observations with three unique hashes, two
+consecutive changes. ACT policy loading reported all keys matched. This is a
+smoke result, not a manipulation success rate.
+
+B0 encoder also completed 3,320 updates; best val P0 loss 0.0262942573. Both
+optimizer states independently contain exactly step 3320. The explicit common
+trunk initialization SHA is
+`84021dab18740505166250626b0df16527e3df6be76540aeac74412dc8367508`.
+
+Policy/eval runner code is ready for an immutable M2 release. Formal policy is
+not yet launched at this commit boundary; run status will be recorded after
+checking the actual process and first training log. Simulator environment source
+files remain unchanged from the working external runtime. Only evaluation seed
+handling, telemetry and failure accounting are wrapped.

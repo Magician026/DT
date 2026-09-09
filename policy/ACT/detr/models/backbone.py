@@ -3,6 +3,8 @@
 Backbone modules.
 """
 from collections import OrderedDict
+from collections.abc import Mapping
+import hashlib
 import os
 import torch
 import torch.nn.functional as F
@@ -20,6 +22,16 @@ sys.path.append(project_root)
 from util.misc import NestedTensor, is_main_process
 
 from .position_encoding import build_position_encoding
+
+# Use the exact encoder class and preprocessing contract shared by pretraining.
+# The repository root is not necessarily on sys.path when ACT is launched from
+# policy/ACT, so add that fixed source root before importing the canonical code.
+repository_root = Path(__file__).resolve().parents[4]
+if str(repository_root) not in sys.path:
+    sys.path.insert(0, str(repository_root))
+
+from encoder.clean_v2 import PREPROCESS
+from encoder.detail_v2 import DetailV2Encoder, OriginalEncoder, load_encoder_checkpoint
 
 import IPython
 
@@ -129,7 +141,7 @@ def build_backbone(args):
     return model
 
 class TactileBackbone(nn.Module):
-    """Tactile backbone with an explicit original/detail encoder switch."""
+    """ACT adapter for legacy tactile encoders and canonical Details V2."""
 
     def __init__(
         self,
@@ -140,12 +152,92 @@ class TactileBackbone(nn.Module):
         return_interm_layers: bool,
         position_embedding,
         tactile_type: Literal['feat', 'full'] = 'feat',
-        tactile_encoder_type: Literal['original', 'detail_v1'] = 'original',
+        tactile_encoder_type: str = 'original',
     ):
         super().__init__()
-        
+
+        checkpoint_path = Path(ckpt).expanduser() if ckpt else None
+        if checkpoint_path is None or not checkpoint_path.is_file():
+            raise FileNotFoundError(f"tactile checkpoint does not exist: {ckpt!r}")
+
         self.train_backbone = train_backbone
+        self.tactile_type = tactile_type
         self.tactile_encoder_type = tactile_encoder_type
+        self.checkpoint_sha256 = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+        self.checkpoint_load_coverage = 1.0
+        self.checkpoint_metadata = None
+        self._uses_canonical_encoder = False
+        self.tac_names = tac_names
+        self.num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
+
+        if tactile_encoder_type == 'detail_v2':
+            if name != 'resnet18':
+                raise ValueError("detail_v2 requires tactile_backbone='resnet18'")
+            if tactile_type != 'feat':
+                raise ValueError("detail_v2 only supports tactile_type='feat'")
+            encoder, metadata = load_encoder_checkpoint(
+                checkpoint_path,
+                expected_encoder_type='detail_v2',
+                expected_preprocess=PREPROCESS,
+            )
+            if not isinstance(encoder, DetailV2Encoder):
+                raise TypeError(
+                    "detail_v2 checkpoint loader returned a non-canonical encoder"
+                )
+            self.backbone = encoder
+            self.position_embedding = nn.Embedding(1, self.num_channels)
+            self.checkpoint_metadata = metadata
+            self._uses_canonical_encoder = True
+            self._freeze_batch_norm_affine_and_stats()
+        elif tactile_encoder_type == 'original':
+            checkpoint = torch.load(
+                checkpoint_path, map_location='cpu', weights_only=True
+            )
+            if isinstance(checkpoint, Mapping) and 'encoder_state' in checkpoint:
+                if name != 'resnet18':
+                    raise ValueError("canonical original encoder requires resnet18")
+                if tactile_type != 'feat':
+                    raise ValueError(
+                        "canonical original encoder only supports tactile_type='feat'"
+                    )
+                encoder, metadata = load_encoder_checkpoint(
+                    checkpoint,
+                    expected_encoder_type='original',
+                    expected_preprocess=PREPROCESS,
+                )
+                if not isinstance(encoder, OriginalEncoder):
+                    raise TypeError(
+                        "original checkpoint loader returned a non-canonical encoder"
+                    )
+                self.backbone = encoder
+                self.position_embedding = nn.Embedding(1, self.num_channels)
+                self.checkpoint_metadata = metadata
+                self._uses_canonical_encoder = True
+                self._freeze_batch_norm_affine_and_stats()
+            else:
+                self._build_original_encoder(
+                    name,
+                    checkpoint,
+                    return_interm_layers,
+                    position_embedding,
+                )
+        else:
+            raise ValueError(
+                f"unsupported tactile_encoder_type: {tactile_encoder_type!r}"
+            )
+
+        if not train_backbone:
+            for parameter in self.parameters():
+                parameter.requires_grad_(False)
+        self.train(self.training)
+
+    def _build_original_encoder(
+        self,
+        name,
+        checkpoint,
+        return_interm_layers,
+        position_embedding,
+    ):
         if return_interm_layers:
             return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
         else:
@@ -153,56 +245,47 @@ class TactileBackbone(nn.Module):
 
         from .network import Tactile
 
-        self.tac_names = tac_names
-        self.num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         backbone = Tactile(backbone='resnet18', supervise=[
             'marker', 'rgb', 'marked_rgb', 'pose', 'depth'
-        ], latent_dims=self.num_channels, norm_layer=FrozenBatchNorm2d,
-            encoder_type=tactile_encoder_type)
-        if ckpt:
-            ckpt_path = Path(ckpt)
-            if ckpt_path.exists():
-                try:
-                    loading_status = backbone.load_state_dict(
-                        torch.load(ckpt_path, weights_only=True), strict=True
-                    )
-                except RuntimeError as exc:
-                    print(
-                        f"Tactile checkpoint incompatible with "
-                        f"encoder_type={tactile_encoder_type}: {ckpt_path}"
-                    )
-                    print(f"missing/unexpected details: {exc}")
-                    raise
-                print(
-                    f"Loaded tactile checkpoint ({tactile_encoder_type}) "
-                    f"from {ckpt_path}: {loading_status}"
-                )
-            else:
-                print(f"Tactile checkpoint not found; using initialization: {ckpt_path}")
+        ], latent_dims=self.num_channels, norm_layer=FrozenBatchNorm2d)
+        backbone.load_state_dict(checkpoint, strict=True)
+        self.checkpoint_metadata = {
+            'encoder_type': 'original',
+            'preprocess': None,
+            'format': 'legacy_tactile_state_dict',
+        }
 
-        self.tactile_type = tactile_type
         if self.tactile_type == 'feat':
             self.backbone = backbone.backbone
             self.position_embedding = nn.Embedding(1, 512)
         else:
-            self.return_layers = return_layers
-            if tactile_encoder_type == 'original':
-                self.backbone = IntermediateLayerGetter(backbone.backbone, return_layers=return_layers)
-            else:
-                self.backbone = backbone.backbone
+            self.backbone = IntermediateLayerGetter(backbone.backbone, return_layers=return_layers)
             self.position_embedding = position_embedding
- 
+
+    def _freeze_batch_norm_affine_and_stats(self):
+        for module in self.backbone.modules():
+            if isinstance(module, nn.modules.batchnorm._BatchNorm):
+                module.eval()
+                if module.affine:
+                    module.weight.requires_grad_(False)
+                    module.bias.requires_grad_(False)
+
+    def train(self, mode=True):
+        super().train(mode)
+        if not self.train_backbone:
+            # Frozen encoders must also keep stochastic layers and BatchNorm state
+            # fixed when the surrounding ACT policy switches to train mode.
+            self.backbone.eval()
+        elif self._uses_canonical_encoder:
+            # Match the reference FrozenBatchNorm policy: ordinary BN parameters
+            # retain checkpoint values and never update affine or running state.
+            self._freeze_batch_norm_affine_and_stats()
+        return self
+
     def forward(self, x):
         feat, pos = [], []
         if self.tactile_type == 'full':
-            if self.tactile_encoder_type == 'detail_v1':
-                all_features = self.backbone.forward_features(x)
-                xs = {
-                    name: all_features[name]
-                    for name in self.return_layers
-                }
-            else:
-                xs = self.backbone(x) # dict of feature maps [N, 512, 8, 8]
+            xs = self.backbone(x) # dict of feature maps [N, 512, 8, 8]
             for name, x in xs.items():
                 feat.append(x)
                 pos.append(self.position_embedding(x).to(x.dtype))
@@ -216,7 +299,11 @@ def build_tactile_backbone(args):
     train_backbone = args.lr_tactile_backbone > 0
     return_interm_layers = args.tactile_masks
     tactile_type = args.tactile_type if hasattr(args, 'tactile_type') else 'feat'
-    tactile_encoder_type = getattr(args, 'tactile_encoder_type', 'original')
+    tactile_encoder_type = (
+        args.tactile_encoder_type
+        if hasattr(args, 'tactile_encoder_type')
+        else 'original'
+    )
     position_embedding = build_position_encoding(args)
     backbone = TactileBackbone(
         args.tactile_backbone,

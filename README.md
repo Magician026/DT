@@ -78,3 +78,46 @@ Historical HDMI 18/100 and released 15/100 use different recipes and are referen
 only. A same-data original B0 is required before a structural improvement claim.
 The initial budget is one encoder seed 42, five full epochs, one policy seed 42,
 then fixed eval seeds 0–19 followed by 0–99 with no duplicate counting.
+
+## Policy and evaluation
+
+`train_policy_v2.py` retains ACT Transformer/action/camera definitions. It uses
+40/10 episode split seed 1 and the existing all-50 qpos/action normalization;
+therefore policy validation is not a strict statistical holdout. Formal training
+is controlled by exactly 4,000 optimizer updates (32 physical batch × 2
+accumulation), not the legacy `num_epochs` compatibility field. All three AdamW
+LRs are 1e-5. Tactile trunk and attention fine-tune; BN affine and running stats
+remain fixed to match the reference FrozenBatchNorm policy. Selection is last.
+
+Before a formal policy launch, export an immutable code directory and record its
+commit (all run outputs must be outside it):
+
+```bash
+REV=$(git rev-parse HEAD)
+mkdir -p "$RELEASE"
+git archive "$REV" | tar -xf - -C "$RELEASE"
+printf '%s\n' "$REV" > "$RELEASE/SOURCE_COMMIT"
+chmod -R a-w "$RELEASE"
+```
+
+Use `scripts/train_policy_v2.py --help` for standalone smoke/restore arguments.
+`scripts/run_v2_chain.py` waits for a verified encoder completion, checks the
+simulator smoke, trains the policy, then evaluates exact seeds 0–19 and 0–99.
+Quick and full results are separate: never sum them into 120 episodes.
+A failed stage exits nonzero. Existing successful eval outputs are reusable only
+with matching policy/config/source hashes and the exact requested seeds.
+
+Simulator launch requires local environment variables `CONDA_SH`, `CONDA_ENV`
+and `ISAAC_SIM_ROOT`. `prepare_eval_v2.py` copies the external official runtime,
+overlays this ACT/encoder stack, preserves environment source hashes, and waits
+for Isaac completion. It records per-step tactile hashes, all requested seeds,
+valid episodes, infrastructure errors and checkpoint/config provenance. A
+3-step `--smoke-steps 3 --allow-smoke` run is never counted as a success-rate run.
+Full eval retains the official 300-action limit and task success definition.
+Infrastructure failures do not become algorithm failures or silently disappear;
+an incomplete run is not a completed success-rate report.
+
+M2 simulator smoke passed on seed 0: one reset, three actions, three different
+tactile hashes. See `docs/results/eval_smoke.json`. The encoder and policy resume
+finalization checks preserve checkpoint SHA and update count. The policy runner
+also saves the independent sampler epoch state/cursor for resuming its data order.

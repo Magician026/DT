@@ -20,11 +20,18 @@ def main():
  if (out/'last_state.pt').exists() and not a.resume:raise RuntimeError('Use --resume for existing run')
  random.seed(cfg['seed']);np.random.seed(cfg['seed']);torch.manual_seed(cfg['seed']);torch.set_num_threads(4)
  audit=json.loads(Path(a.data_audit).read_text());split=json.loads(Path(a.split).read_text());assert audit['split_hash']==manifest_hash(split)
- cfg.update(split_hash=audit['split_hash'],normalization=audit['normalization'],preprocess=PREPROCESS,run_id=out.name,pid=os.getpid(),smoke=a.smoke)
+ cfg.update(split_hash=audit['split_hash'],normalization=audit['normalization'],preprocess=PREPROCESS,run_id=out.name,pid=os.getpid(),smoke=a.smoke,probe=a.probe,data_audit_sha256=sha(a.data_audit))
+ assert cfg['weights']=={k:1.0 for k in cfg['active_heads']},'P0 fixes all active weights to 1'
+ assert set(cfg['active_heads']) <= {'depth','marker'},'This audited P0 supports contact targets only'
+ contract={k:v for k,v in cfg.items() if k not in ('pid','source_commit')}
+ contract_hash=manifest_hash(contract)
+ if a.resume:
+  previous=json.loads((out/'resolved_config.json').read_text());assert previous.get('contract_hash')==contract_hash,'Resume contract changed'
+ cfg['contract_hash']=contract_hash
  atomic_json(out/'resolved_config.json',cfg)
  trunk_state=torch.load(a.trunk_init,weights_only=True) if a.trunk_init else None
  encoder=build_encoder(cfg['encoder_type'],trunk_state=trunk_state);model=P0Model(encoder,cfg['active_heads']).cuda()
- trunk=encoder.export_trunk_state();init=out/'shared_trunk_init.pt';torch.save(trunk,init);cfg['shared_trunk_sha256']=sha(init)
+ trunk=encoder.export_trunk_state();init=out/'shared_trunk_init.pt';temp=init.with_suffix('.tmp');torch.save(trunk,temp);temp.replace(init);cfg['shared_trunk_sha256']=sha(init)
  optimizer=torch.optim.AdamW(model.parameters(),lr=cfg['lr'],weight_decay=cfg['weight_decay'])
  datasets={s:CleanDataset(a.clean,split[s],cfg['active_heads'],audit['normalization'],stride=cfg['frame_stride']) for s in ('train','val')}
  if a.smoke:
@@ -33,7 +40,7 @@ def main():
  cfg['samples']={k:len(v) for k,v in datasets.items()};atomic_json(out/'resolved_config.json',cfg)
  best=float('inf');step=0;start=0
  if a.resume:
-  state=torch.load(out/'last_state.pt',weights_only=False);assert state['split_hash']==cfg['split_hash'];model.load_state_dict(state['model'],strict=True);optimizer.load_state_dict(state['optimizer']);start=state['epoch']+1;step=state['step'];best=state['best'];torch.set_rng_state(state['rng']);torch.cuda.set_rng_state_all(state['cuda_rng']);np.random.set_state(state['numpy_rng']);random.setstate(state['python_rng'])
+  state=torch.load(out/'last_state.pt',weights_only=False);assert state['split_hash']==cfg['split_hash'];assert state['contract_hash']==contract_hash;model.load_state_dict(state['model'],strict=True);optimizer.load_state_dict(state['optimizer']);start=state['epoch']+1;step=state['step'];best=state['best'];torch.set_rng_state(state['rng']);torch.cuda.set_rng_state_all(state['cuda_rng']);np.random.set_state(state['numpy_rng']);random.setstate(state['python_rng'])
  print(json.dumps({'status':'running','pid':os.getpid(),'config':cfg}),flush=True)
  t0=time.time();gradient_report={};curve=[]
  for epoch in range(start,1 if a.smoke or a.probe else cfg['epochs']):
@@ -64,7 +71,7 @@ def main():
   if val<best:
    best=val;save_encoder_checkpoint(out/'best.pt',encoder,PREPROCESS)
   save_encoder_checkpoint(out/'last.pt',encoder,PREPROCESS)
-  state={'model':model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch,'step':step,'best':best,'split_hash':cfg['split_hash'],'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'numpy_rng':np.random.get_state(),'python_rng':random.getstate()}
+  state={'model':model.state_dict(),'optimizer':optimizer.state_dict(),'epoch':epoch,'step':step,'best':best,'split_hash':cfg['split_hash'],'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'numpy_rng':np.random.get_state(),'python_rng':random.getstate(),'contract_hash':contract_hash}
   temp=out/'last_state.tmp';torch.save(state,temp);temp.replace(out/'last_state.pt')
   record={'epoch':epoch,'step':step,'train_loss':sum(values)/len(values),'val_loss':val,'best_val':best,'elapsed':time.time()-t0}
   with (out/'metrics.jsonl').open('a') as f:f.write(json.dumps(record)+'\n')
@@ -73,6 +80,7 @@ def main():
  reloaded,meta=load_encoder_checkpoint(out/'best.pt',expected_encoder_type=cfg['encoder_type'],expected_preprocess=PREPROCESS)
  # Validate exported last matches the actual eval embedding (best may be from an earlier epoch).
  last,_=load_encoder_checkpoint(out/'last.pt',expected_encoder_type=cfg['encoder_type'],expected_preprocess=PREPROCESS);last=last.cuda().eval()
- with torch.no_grad():torch.testing.assert_close(last(x.cuda()),encoder.eval()(x.cuda()),rtol=0,atol=0)
- atomic_json(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':cfg['source_commit'],'encoder_type':cfg['encoder_type'],'steps':step,'best_val':best,'checkpoint':'best.pt','checkpoint_sha256':sha(out/'best.pt'),'split_hash':cfg['split_hash'],'elapsed':time.time()-t0,'smoke':a.smoke,'probe':a.probe,'overfit_first5':float(np.mean(curve[:5])),'overfit_last5':float(np.mean(curve[-5:]))})
+ check_x=next(iter(loaders['val']))[0].cuda()
+ with torch.no_grad():torch.testing.assert_close(last(check_x),encoder.eval()(check_x),rtol=0,atol=0)
+ atomic_json(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':cfg['source_commit'],'encoder_type':cfg['encoder_type'],'steps':step,'best_val':best,'checkpoint':'best.pt','checkpoint_sha256':sha(out/'best.pt'),'split_hash':cfg['split_hash'],'elapsed':time.time()-t0,'smoke':a.smoke,'probe':a.probe,'overfit_first5':float(np.mean(curve[:5])) if curve else None,'overfit_last5':float(np.mean(curve[-5:])) if curve else None,'contract_hash':contract_hash})
 if __name__=='__main__':main()

@@ -1,0 +1,23 @@
+{
+  "action_count": 3,
+  "dataset_stats_sha256": "9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b",
+  "encoder_sha256": "914d9d8315a8ccd7fd88ea853b20375a90010ac45968e88e9d2eb386abffe448",
+  "policy_checkpoint_sha256": "c7b753df4ff4124439e88752ef1064bc42da8b278e6c24c746576f93bf48d15b",
+  "policy_source_commit": "pre-M2",
+  "requested_seeds": [
+    0
+  ],
+  "requested_steps": 3,
+  "reset_attempts": 1,
+  "seed": 0,
+  "seed_manifest_sha256": "c14196f132c1e9be0508ae80ab52fcb3e1d3fc05880415f3dc980971df207c9e",
+  "source_tree_sha256": "e32868e032627ce25176038fe4813109ba982a1889cd94b426d5ee66d0f4abda",
+  "status": "smoke_pass",
+  "succ_num": 0,
+  "tactile_change_count": 2,
+  "tactile_observation_count": 3,
+  "task": "insert_HDMI",
+  "test_num": 0,
+  "train_config_sha256": "376000bcb9d7c8efff0bcc5ffd8c2548bac9a5547571695825d54dbbbc4f4b49",
+  "unique_tactile_hashes": 3
+}
