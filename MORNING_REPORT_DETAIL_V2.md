@@ -1,10 +1,10 @@
 # 1 Current Status
 
-Updated: 2026-09-09T15:42:18.999466+00:00
+Updated: 2026-09-09T15:46:13.586280+00:00
 
 Encoder: completed (V2 and same-data B0). Policy seed 42: completed, 4000 updates.
 
-Eval: 20 / 100 verified seeds completed. Night stage: v2_seed42_eval_20_99; status: running.
+Eval: 20 / 100 verified seeds completed. Night stage: v2_seed42_eval_20_99; status: waiting_existing.
 
 # 2 Details V2 Result
 
@@ -36,7 +36,7 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 
 # 6 Jobs / Processes
 
-Current stage: `v2_seed42_eval_20_99`; controller PID `not yet started`; child PID `2358130`; GPU `2`. Log: `v2_chain_seed42/eval_20_99/eval.log`. These are timestamped observations, not proof of perpetual liveness.
+Current stage: `v2_seed42_eval_20_99`; controller PID `2906792`; child PID `2353201`; GPU `2`. Log: `v2_chain_seed42/eval_20_99/eval.log`. These are timestamped observations, not proof of perpetual liveness.
 
 # 7 Failures
 
@@ -47,7 +47,7 @@ Current stage: `v2_seed42_eval_20_99`; controller PID `not yet started`; child P
 
 # 8 Git
 
-Night controller source commit: `pre-night-release`. Public stage results and latest successful push are recorded in `results/git_sync.json`; if absent, final sync is pending. Do not infer push success from a local commit.
+Night controller source commit: `79b0913a033561a301c7fd097a4be52d22f380bc`. Push of this code version to `origin/codex/details-v2` confirmed. Server validation: 48 passed. Receipts: `results/git_sync.json`.
 
 # 9 Evidence-backed Conclusion
 
