@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "run_id": "policy_seed1",
+  "source_commit": "79b0913a033561a301c7fd097a4be52d22f380bc",
+  "smoke": false,
+  "optimizer_updates": 4000,
+  "micro_iterations": 8000,
+  "encoder_sha256": "914d9d8315a8ccd7fd88ea853b20375a90010ac45968e88e9d2eb386abffe448",
+  "checkpoint": "policy_last.ckpt",
+  "checkpoint_sha256": "65fdf4a9ff9df57893531912a81fb119b66e3401797755c52254aab9fc3400f3",
+  "dataset_stats_sha256": "9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b",
+  "policy_split_hash": "b40d2521b5e689d03d7ff22ba0f79d7a7e81c64c40d91a720be58d27c9aae70f",
+  "elapsed": 1922.1523113250732
+}

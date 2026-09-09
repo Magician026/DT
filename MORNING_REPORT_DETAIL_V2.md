@@ -1,10 +1,10 @@
 # 1 Current Status
 
-Updated: 2026-09-09T18:27:52.626466+00:00
+Updated: 2026-09-09T19:00:13.632943+00:00
 
 Encoder: completed (V2 and same-data B0). Policy seed 42: completed, 4000 updates.
 
-Eval: 100 / 100 verified seeds completed. Night stage: policy_seed1; status: running.
+Eval: 100 / 100 verified seeds completed. Night stage: seed1_eval_0_19; status: running.
 
 # 2 Details V2 Result
 
@@ -23,7 +23,7 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 # 4 Policy Training Seeds
 
 - Seed 42: training completed; checkpoint `v2_chain_seed42/policy_seed42/policy_last.ckpt`; Success: 31 / 100
-- Seed 1: training running (observed 2900/4000 updates at 2026-09-10 02:50 Asia/Singapore; started 02:27:52); checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
+- Seed 1: training completed (4000 updates / 8000 micro-iterations; checkpoint SHA256 `65fdf4a9ff9df57893531912a81fb119b66e3401797755c52254aab9fc3400f3`); checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
 
 # 5 Integrity Audit
 
@@ -36,7 +36,9 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 
 # 6 Jobs / Processes
 
-Current stage: `policy_seed1`; controller PID `2906792`; child PID `737327`; GPU `2`. Log: `night_control/policy_seed1.log`. These are timestamped observations, not proof of perpetual liveness.
+2026-09-10 03:22 Asia/Singapore: seed 1 quick eval completed rollout seeds 0–7; full smoke aggregation pending. Launcher 2741855, simulator 2746888; GPU 2.
+
+Current stage: `seed1_eval_0_19`; controller PID `2906792`; child PID `2741855`; GPU `2`. Log: `night_control/seed1_eval_0_19.log`. These are timestamped observations, not proof of perpetual liveness.
 
 # 7 Failures
 
@@ -47,7 +49,7 @@ Current stage: `policy_seed1`; controller PID `2906792`; child PID `737327`; GPU
 
 # 8 Git
 
-Last confirmed GitHub push: `4041cac7d38c80d16be582c7739ca66a73bbb915`; current result snapshot sync follows.
+Last confirmed GitHub stage push: `4a1167e`; this training-completion snapshot is synced separately.
 
 Night controller source commit: `79b0913a033561a301c7fd097a4be52d22f380bc`. Public stage results and latest successful push are recorded in `results/git_sync.json`; if absent, final sync is pending. Do not infer push success from a local commit.
 
