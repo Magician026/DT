@@ -113,7 +113,7 @@ overlays this ACT/encoder stack, preserves environment source hashes, and waits
 for Isaac completion. It records per-step tactile hashes, all requested seeds,
 valid episodes, infrastructure errors and checkpoint/config provenance. A
 3-step `--smoke-steps 3 --allow-smoke` run is never counted as a success-rate run.
-Full eval retains the official 300-action limit and task success definition.
+Full eval retains the actual HDMI 600-action limit and task success definition.
 Infrastructure failures do not become algorithm failures or silently disappear;
 an incomplete run is not a completed success-rate report.
 

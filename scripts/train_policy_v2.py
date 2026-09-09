@@ -17,6 +17,11 @@ def atomic(path,value):
  path=Path(path);tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(value,indent=2));tmp.replace(path)
 def save(path,value):
  path=Path(path);tmp=path.with_suffix('.tmp');torch.save(value,tmp);tmp.replace(path)
+def resolve_policy_config(config_path,tactile_ckpt,out):
+ cfg=yaml.safe_load(Path(config_path).read_text()) or {}
+ cfg.setdefault('seed',42)
+ cfg.update(tactile_ckpt=str(tactile_ckpt),ckpt_dir=str(out),num_epochs=6000,device='cuda:0')
+ return cfg
 def main():
  p=argparse.ArgumentParser();p.add_argument('--config',required=True);p.add_argument('--data',required=True);p.add_argument('--encoder-run',required=True);p.add_argument('--out',required=True);p.add_argument('--source-commit',required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--smoke-batch',type=int,default=2);p.add_argument('--eval-smoke');p.add_argument('--resume',action='store_true');a=p.parse_args()
  if not a.smoke and (ROOT/'SOURCE_COMMIT').read_text().strip()!=a.source_commit:raise RuntimeError('Immutable release/source commit mismatch')
@@ -30,7 +35,7 @@ def main():
   ev=json.loads(Path(a.eval_smoke).read_text());assert ev['status']=='smoke_pass','Need a validated simulator smoke path'
  ckpt=er/completion['checkpoint'];assert sha(ckpt)==completion['checkpoint_sha256']
  enc,_=load_encoder_checkpoint(ckpt,expected_encoder_type='detail_v2',expected_preprocess=PREPROCESS)
- cfg=yaml.safe_load(Path(a.config).read_text());cfg.update(tactile_ckpt=str(ckpt),ckpt_dir=str(out),num_epochs=6000,seed=42,device='cuda:0')
+ cfg=resolve_policy_config(a.config,ckpt,out)
  if not a.smoke and cfg['num_steps']!=4000:raise ValueError('Formal protocol requires exactly 4000 optimizer updates')
  cfg.update(training_control='optimizer_updates',resume_data_order='restore independent sampler epoch generator state and batch cursor')
  cfg.update(run_id=out.name,source_commit=a.source_commit,encoder_sha256=sha(ckpt),smoke=a.smoke,physical_batch=a.smoke_batch if a.smoke else 32,gradient_accumulation=1 if a.smoke and a.smoke_batch==2 else 2)

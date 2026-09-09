@@ -1,0 +1,44 @@
+# Insert HDMI ACT: Details V2 replica, fixed 4000 optimizer updates.
+# This file is an experiment overlay; it differs from policy_v2.yml only by seed.
+state_dim: 8
+kl_weight: 10.0
+chunk_size: 50
+hidden_dim: 512
+dim_feedforward: 3200
+
+temporal_agg: true
+device: cuda:0
+
+ckpt_dir: null
+policy_class: ACT
+num_steps: 4000
+num_epochs: 6000
+
+batch_size: 64
+save_freq: 1000
+position_embedding: sine
+lr_vision_backbone: 0.00001
+weight_decay: 0.0001
+lr: 0.00001
+masks: false
+dilation: false
+backbone: resnet18
+nheads: 8
+enc_layers: 4
+dec_layers: 7
+pre_norm: false
+dropout: 0.1
+camera_names:
+  - cam_high
+
+tactile_names:
+  - tac_left
+  - tac_right
+lr_tactile_backbone: 0.00001
+tactile_masks: false
+tactile_backbone: resnet18
+tactile_type: feat
+tactile_encoder_type: detail_v2
+tactile_dilation: false
+seed: 1
+task_name: sim-insert_HDMI-demo-50
