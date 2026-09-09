@@ -1,18 +1,18 @@
 # 1 Current Status
 
-Updated: 2026-09-09T15:46:13.586280+00:00
+Updated: 2026-09-09T18:27:52.626466+00:00
 
 Encoder: completed (V2 and same-data B0). Policy seed 42: completed, 4000 updates.
 
-Eval: 20 / 100 verified seeds completed. Night stage: v2_seed42_eval_20_99; status: waiting_existing.
+Eval: 100 / 100 verified seeds completed. Night stage: policy_seed1; status: running.
 
 # 2 Details V2 Result
 
-Success: 5 / 20
+Success: 31 / 100
 
-Success Rate: 25.0%
+Success Rate: 31.0%
 
-95% Wilson CI: [11.2%, 46.9%]
+95% Wilson CI: [22.8%, 40.6%]
 
 Task: Insert HDMI. Official environment action limit: 600; unchanged for all nightly runs. Current source policy commit: 3cd75efd5b80aa14bc0ba13900c9b2e6e942bea8.
 
@@ -22,8 +22,8 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 
 # 4 Policy Training Seeds
 
-- Seed 42: training completed; checkpoint `v2_chain_seed42/policy_seed42/policy_last.ckpt`; Success: 5 / 20
-- Seed 1: training not started; checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
+- Seed 42: training completed; checkpoint `v2_chain_seed42/policy_seed42/policy_last.ckpt`; Success: 31 / 100
+- Seed 1: training running (observed 2900/4000 updates at 2026-09-10 02:50 Asia/Singapore; started 02:27:52); checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
 
 # 5 Integrity Audit
 
@@ -36,7 +36,7 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 
 # 6 Jobs / Processes
 
-Current stage: `v2_seed42_eval_20_99`; controller PID `2906792`; child PID `2353201`; GPU `2`. Log: `v2_chain_seed42/eval_20_99/eval.log`. These are timestamped observations, not proof of perpetual liveness.
+Current stage: `policy_seed1`; controller PID `2906792`; child PID `737327`; GPU `2`. Log: `night_control/policy_seed1.log`. These are timestamped observations, not proof of perpetual liveness.
 
 # 7 Failures
 
@@ -47,7 +47,9 @@ Current stage: `v2_seed42_eval_20_99`; controller PID `2906792`; child PID `2353
 
 # 8 Git
 
-Night controller source commit: `79b0913a033561a301c7fd097a4be52d22f380bc`. Push of this code version to `origin/codex/details-v2` confirmed. Server validation: 48 passed. Receipts: `results/git_sync.json`.
+Last confirmed GitHub push: `4041cac7d38c80d16be582c7739ca66a73bbb915`; current result snapshot sync follows.
+
+Night controller source commit: `79b0913a033561a301c7fd097a4be52d22f380bc`. Public stage results and latest successful push are recorded in `results/git_sync.json`; if absent, final sync is pending. Do not infer push success from a local commit.
 
 # 9 Evidence-backed Conclusion
 
