@@ -60,3 +60,17 @@ not yet launched at this commit boundary; run status will be recorded after
 checking the actual process and first training log. Simulator environment source
 files remain unchanged from the working external runtime. Only evaluation seed
 handling, telemetry and failure accounting are wrapped.
+
+## Formal chain started (2026-09-09 21:58 +08:00)
+
+- Immutable policy/eval source: `3cd75efd5b80aa14bc0ba13900c9b2e6e942bea8`.
+- Full M2 test suite: `42 passed in 9.06s` on the training server.
+- Chain PID 4044695; policy PID 4045080; GPU 2.
+- Actual observed policy progress: 175/4000 optimizer updates, 350 micro-batches,
+  physical/effective batch 32/64, LR groups all 1e-5, loss 3.0397.
+- Policy status: running. Quick/full eval: waiting for verified policy completion.
+- No success rate exists yet. The thread follows meaningful stage changes and
+  will sync actual results. This record is a timestamped observation, not a claim
+  that the processes remain alive indefinitely.
+- No current blocking issue. The GPU phase lock and run lock prevent duplicate
+  launches of this chain; the fixed release is read-only.
