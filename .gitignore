@@ -55,3 +55,16 @@ textures.zip
 /checkpoints/
 /*.png
 **/tmp.png
+
+# Details V2 local artifacts
+runs/
+.venv/
+*.pt
+*.pth
+*.ckpt
+*.hdf5
+*.mp4
+*.log
+.env
+*.pkl
+.pytest_cache/
