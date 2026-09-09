@@ -1,10 +1,10 @@
 # 1 Current Status
 
-Updated: 2026-09-09T19:47:36.184685+00:00
+Updated: 2026-09-09T22:52:08.714927+00:00
 
 Encoder: completed (V2 and same-data B0). Policy seed 42: completed, 4000 updates.
 
-Eval: 100 / 100 verified seeds completed. Night stage: seed1_eval_20_99; status: running.
+Eval: policy seed 42 and policy seed 1 each completed 100 / 100 verified seeds. Night stage: night_completed; status: completed.
 
 # 2 Details V2 Result
 
@@ -16,6 +16,8 @@ Success Rate: 31.0%
 
 Task: Insert HDMI. Official environment action limit: 600; unchanged for all nightly runs. Current source policy commit: 3cd75efd5b80aa14bc0ba13900c9b2e6e942bea8.
 
+Policy seed 1: 23 / 100, success rate 23%, Wilson 95% CI [15.8%, 32.2%]. Across-policy mean: 27%; observed difference: 8 percentage points. These are two policy trainings with one fixed encoder, not 200 independent model seeds.
+
 # 3 Matched B0 Result
 
 MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched trained B0 policy was found; historical policies are reference only.
@@ -23,7 +25,9 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 # 4 Policy Training Seeds
 
 - Seed 42: training completed; checkpoint `v2_chain_seed42/policy_seed42/policy_last.ckpt`; Success: 31 / 100
-- Seed 1: training completed; checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
+- Seed 1: training completed; checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result 23/100 (23.0%).
+
+Mean success rate across the two policy seeds: 27.0%. Separate policy rates retained; not a pooled independent-training estimate.
 
 # 5 Integrity Audit
 
@@ -36,9 +40,7 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 
 # 6 Jobs / Processes
 
-2026-09-10 03:53 Asia/Singapore: policy seed 1 smoke evaluation completed 5/20, no abnormal seeds. Continuation 20–99 is running; launcher 1586874, simulator 1592219, GPU 2. Seed 20 completed.
-
-Current stage: `seed1_eval_20_99`; controller PID `2906792`; child PID `1586874`; GPU `2`. Log: `night_control/seed1_eval_20_99.log`. These are timestamped observations, not proof of perpetual liveness.
+Night sequence completed at 2026-09-10 06:52:08 Asia/Singapore. Controller 2906792, launcher 1586874 and simulator 1592219 have exited (verified after completion). No remaining jobs in this night sequence. Logs retained under `runs/night_control/`: `policy_seed1.log`, `seed1_eval_0_19.log`, `seed1_eval_20_99.log`, and each eval directory `results/`.
 
 # 7 Failures
 
@@ -46,6 +48,8 @@ Current stage: `seed1_eval_20_99`; controller PID `2906792`; child PID `1586874`
 - Earlier recovery wrapper: unmatched parenthesis before simulator launch; corrected and logs retained.
 - Prior launcher started a duplicate full 0–99 attempt after successful quick 0–19, before the latest no-repeat instruction. Duplicate attempt stopped; all its rows excluded. Quick results preserved; continuation runs only 20–99. SIGTERM did not terminate that simulator; SIGKILL was required for that duplicate process only. Continuation startup briefly overlapped process teardown before its first rollout; no completed quick rollout was interrupted.
 - Documentation previously said 300 actions; actual HDMI source specifies 600. Documentation corrected; environment and criterion unchanged.
+
+- Local SSH DNS resolution failed during monitoring from 04:54 to 06:33; recovered by 06:48. Remote evaluation continued, with no restart or scientific configuration change.
 
 # 8 Git
 
@@ -57,6 +61,5 @@ INCONCLUSIVE — current results can establish pipeline operation and estimate t
 
 # 10 Recommended Next Action
 
-1. Complete and verify disjoint seed 0–99 results for each authorized policy seed.
-2. Obtain a strictly matched B0 policy before drawing an architecture improvement conclusion.
-3. Review paired results and policy-seed variability; keep negative outcomes without tuning this experiment.
+1. Train a strictly matched Original ResNet18 B0 policy using the existing same-data B0 encoder, then evaluate paired rollout seeds 0–99.
+2. Compare matched B0 against both V2 policy seeds before deciding whether to invest in architecture changes.

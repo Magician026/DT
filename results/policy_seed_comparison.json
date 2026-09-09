@@ -1,0 +1,7 @@
+{
+  "policy_seed_42": 0.31,
+  "policy_seed_1": 0.23,
+  "mean_success_rate": 0.27,
+  "encoder_seed": 42,
+  "note": "Two independent policy training seeds, one fixed encoder. Do not pool as independent model trainings."
+}
