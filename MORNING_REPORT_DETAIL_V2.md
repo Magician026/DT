@@ -1,10 +1,10 @@
 # 1 Current Status
 
-Updated: 2026-09-09T19:00:13.632943+00:00
+Updated: 2026-09-09T19:47:36.184685+00:00
 
 Encoder: completed (V2 and same-data B0). Policy seed 42: completed, 4000 updates.
 
-Eval: 100 / 100 verified seeds completed. Night stage: seed1_eval_0_19; status: running.
+Eval: 100 / 100 verified seeds completed. Night stage: seed1_eval_20_99; status: running.
 
 # 2 Details V2 Result
 
@@ -23,7 +23,7 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 # 4 Policy Training Seeds
 
 - Seed 42: training completed; checkpoint `v2_chain_seed42/policy_seed42/policy_last.ckpt`; Success: 31 / 100
-- Seed 1: training completed (4000 updates / 8000 micro-iterations; checkpoint SHA256 `65fdf4a9ff9df57893531912a81fb119b66e3401797755c52254aab9fc3400f3`); checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
+- Seed 1: training completed; checkpoint expected `night_control/policy_seed1/policy_last.ckpt`; 100-seed result not yet available.
 
 # 5 Integrity Audit
 
@@ -36,9 +36,9 @@ MATCHED_BASELINE_NOT_AVAILABLE. Same-P0 original encoder exists, but no matched 
 
 # 6 Jobs / Processes
 
-2026-09-10 03:22 Asia/Singapore: seed 1 quick eval completed rollout seeds 0–7; full smoke aggregation pending. Launcher 2741855, simulator 2746888; GPU 2.
+2026-09-10 03:53 Asia/Singapore: policy seed 1 smoke evaluation completed 5/20, no abnormal seeds. Continuation 20–99 is running; launcher 1586874, simulator 1592219, GPU 2. Seed 20 completed.
 
-Current stage: `seed1_eval_0_19`; controller PID `2906792`; child PID `2741855`; GPU `2`. Log: `night_control/seed1_eval_0_19.log`. These are timestamped observations, not proof of perpetual liveness.
+Current stage: `seed1_eval_20_99`; controller PID `2906792`; child PID `1586874`; GPU `2`. Log: `night_control/seed1_eval_20_99.log`. These are timestamped observations, not proof of perpetual liveness.
 
 # 7 Failures
 
@@ -48,8 +48,6 @@ Current stage: `seed1_eval_0_19`; controller PID `2906792`; child PID `2741855`;
 - Documentation previously said 300 actions; actual HDMI source specifies 600. Documentation corrected; environment and criterion unchanged.
 
 # 8 Git
-
-Last confirmed GitHub stage push: `4a1167e`; this training-completion snapshot is synced separately.
 
 Night controller source commit: `79b0913a033561a301c7fd097a4be52d22f380bc`. Public stage results and latest successful push are recorded in `results/git_sync.json`; if absent, final sync is pending. Do not infer push success from a local commit.
 
