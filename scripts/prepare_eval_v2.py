@@ -103,6 +103,17 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
     return completion, dict(config), is_smoke
 
 
+def _make_copy_writable(root: Path) -> None:
+    """Only change copied files; never follow external asset symlinks."""
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        path = Path(directory)
+        path.chmod(path.stat().st_mode | 0o700)
+        for name in files:
+            child = path / name
+            if not child.is_symlink():
+                child.chmod(child.stat().st_mode | 0o600)
+
+
 def _copy_ignore(_directory: str, names: list[str]) -> set[str]:
     ignored = {".git", "__pycache__", "act_ckpt", "eval_result", "data"}
     return {
@@ -271,6 +282,7 @@ def prepare_runtime(
             symlinks=True,
             ignore=_copy_ignore,
         )
+        _make_copy_writable(runtime)
         shutil.copy2(Path(__file__).with_name("eval_loop_v2.py"), runtime / "eval_loop_v2.py")
         _patch_eval_script(runtime / "scripts" / "eval_policy.py")
         if _tree_python_hashes(runtime / "envs") != official_env_hashes:
@@ -343,6 +355,7 @@ def prepare_runtime(
         staging.replace(out)
     except Exception:
         if staging.exists():
+            _make_copy_writable(staging)
             shutil.rmtree(staging)
         raise
     return manifest

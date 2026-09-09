@@ -335,3 +335,23 @@ def test_launch_waits_for_eval_completion_and_checks_injected_contract(tmp_path,
     completion = json.loads((out / "results" / "completion.json").read_text())
     assert completion["policy_checkpoint_sha256"] == prepared["checkpoint_sha256"]
     assert completion["requested_seeds"] == [0, 7, 11]
+
+
+def test_readonly_copy_permissions_do_not_follow_external_symlinks(tmp_path):
+    from scripts.prepare_eval_v2 import _make_copy_writable
+    root = tmp_path / 'copy'
+    root.mkdir()
+    child = root / 'model.py'
+    child.write_text('pass')
+    external = tmp_path / 'external'
+    external.mkdir()
+    asset = external / 'asset'
+    asset.write_text('preserve')
+    asset.chmod(0o444)
+    (root / 'assets').symlink_to(external, target_is_directory=True)
+    child.chmod(0o444)
+    root.chmod(0o555)
+    _make_copy_writable(root)
+    assert root.stat().st_mode & 0o200
+    assert child.stat().st_mode & 0o200
+    assert not asset.stat().st_mode & 0o200

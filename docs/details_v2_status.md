@@ -74,3 +74,13 @@ handling, telemetry and failure accounting are wrapped.
   that the processes remain alive indefinitely.
 - No current blocking issue. The GPU phase lock and run lock prevent duplicate
   launches of this chain; the fixed release is read-only.
+
+## Policy completed; eval preparation repair
+
+Policy completed exactly 4,000 optimizer updates / 8,000 micro-batches.
+Checkpoint SHA256: `3047f071db09e307d9bbbf942b70ef1b49977c1c0935a7a76a676fec3c720d52`.
+The initial quick-eval preparation failed before simulator launch: copying the
+immutable release preserved read-only directory permissions. Preparation now
+makes only the isolated runtime copy writable, without following asset symlinks.
+Eight eval tests pass, including the read-only-copy/symlink regression test.
+No algorithm, checkpoint, preprocessing, task definition or seeds changed.
