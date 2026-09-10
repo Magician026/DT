@@ -30,6 +30,14 @@ def test_dynamic_p0_reports_unweighted_delta_and_applies_half_weight():
     )
     for parameter in model.parameters():
         nn.init.zeros_(parameter)
+    model.encoder.embedding.data.fill_(11.0)
+    model.encoder.dynamic.data.fill_(-3.0)
+    observed = {}
+
+    def capture_dynamic_input(_module, inputs):
+        observed["dynamic_decoder_input"] = inputs[0].detach().clone()
+
+    handle = model.dynamic_decoder.register_forward_pre_hook(capture_dynamic_input)
     inputs = torch.zeros(2, 4, 3, 16, 16)
     targets = {
         "depth": torch.ones(2, 1, 24, 32),
@@ -37,9 +45,19 @@ def test_dynamic_p0_reports_unweighted_delta_and_applies_half_weight():
         "delta_marker": torch.full((2, 1200, 2), 3.0),
     }
 
-    loss, parts = model.loss(inputs, targets)
+    try:
+        loss, parts = model.loss(inputs, targets)
+    finally:
+        handle.remove()
 
     assert model.dynamic_decoder(torch.zeros(2, 256)).shape == (2, 1200, 2)
+    torch.testing.assert_close(
+        observed["dynamic_decoder_input"], torch.full((2, 256), -3.0)
+    )
+    assert not torch.equal(
+        observed["dynamic_decoder_input"],
+        model.encoder.embedding.detach()[:256].expand(2, -1),
+    )
     assert set(parts) == {"depth", "marker", "delta_marker", "total"}
     torch.testing.assert_close(parts["depth"], torch.tensor(1.0))
     torch.testing.assert_close(parts["marker"], torch.tensor(4.0))
@@ -111,6 +129,39 @@ def test_dynamic_initialization_requires_and_records_strict_spatial_provenance(t
     assert provenance["warm_start_report"]["target_encoder_type"] == "detail_v2_dynamic"
     assert provenance["warm_start_report"]["compatible_key_count"] > 0
     assert provenance["warm_start_report"]["new_key_count"] > 0
+    spatial_state = torch.load(source, weights_only=True)["encoder_state"]
+    dynamic_state = encoder.state_dict()
+    for name, value in spatial_state.items():
+        torch.testing.assert_close(dynamic_state[name], value, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("channels", "rgb"), ("scale", 1.0)],
+)
+def test_dynamic_initialization_rejects_spatial_preprocess_drift(
+    tmp_path, field, value
+):
+    from encoder.clean_v2 import PREPROCESS
+    from encoder.detail_v2 import build_encoder, save_encoder_checkpoint
+    from scripts.train_encoder_v2 import initialize_encoder
+
+    source = tmp_path / f"bad-{field}.pt"
+    altered = {**PREPROCESS, field: value}
+    save_encoder_checkpoint(source, build_encoder("detail_v2"), altered)
+    config = {
+        "encoder_type": "detail_v2_dynamic",
+        "sequence_length": 4,
+        "temporal_stride": 1,
+        "initial_gate": 0.15,
+    }
+
+    with pytest.raises(ValueError, match="preprocess mismatch"):
+        initialize_encoder(
+            config,
+            spatial_init=source,
+            spatial_source_commit="abc123",
+        )
 
 
 def test_static_initialization_remains_backward_compatible():

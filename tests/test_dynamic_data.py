@@ -55,6 +55,18 @@ def test_causal_indices_repeat_first_and_apply_stride():
         causal_history_indices(1, 4, 0)
 
 
+def test_dataset_rejects_missing_normalization_even_with_unrelated_extra_key(tmp_path):
+    from encoder.dynamic_data import DynamicCleanDataset
+
+    incomplete = {
+        "depth": {"mean": 0.0, "std": 1.0},
+        "marker": {"mean": 0.0, "std": 1.0},
+        "rgb": {"mean": 0.0, "std": 1.0},
+    }
+    with pytest.raises(ValueError, match="delta_marker"):
+        DynamicCleanDataset(tmp_path, [], incomplete)
+
+
 def test_dataset_keeps_history_within_trajectory_and_side_and_aligns_targets(tmp_path):
     from encoder.dynamic_data import DynamicCleanDataset
 

@@ -73,7 +73,7 @@ class DynamicCleanDataset(Dataset):
         if stride < 1:
             raise ValueError("stride must be positive")
         required_statistics = {"depth", "marker", "delta_marker"}
-        if set(normalization) < required_statistics:
+        if not required_statistics <= set(normalization):
             raise ValueError(
                 f"normalization missing {sorted(required_statistics - set(normalization))}"
             )

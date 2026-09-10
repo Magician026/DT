@@ -32,6 +32,7 @@ def initialize_encoder(cfg,*,spatial_init,spatial_source_commit,trunk_init=None)
   source=Path(spatial_init).resolve()
   if not source.is_file():raise FileNotFoundError(source)
   source_sha256=sha(source)
+  load_encoder_checkpoint(source,expected_encoder_type='detail_v2',expected_preprocess=PREPROCESS)
   structure={k:cfg[k] for k in ('sequence_length','temporal_stride','token_dim','num_heads','attention_dropout','initial_gate') if k in cfg}
   encoder,report=warm_start_dynamic_encoder(source,**structure)
   if sha(source)!=source_sha256:raise RuntimeError('Spatial V2 source changed during warm-start')
