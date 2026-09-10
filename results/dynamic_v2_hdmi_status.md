@@ -1,6 +1,6 @@
 # Dynamic Details V2 — Insert HDMI Status
 
-Updated: 2026-09-10 (Asia/Singapore)
+Updated: 2026-09-11 (Asia/Singapore)
 
 ## Implementation and data contract
 
@@ -41,5 +41,8 @@ Updated: 2026-09-10 (Asia/Singapore)
 - Local regression suite: 86 passed, including strict stride-2 encoder checkpoint reload, ACT contract, and eval metadata consistency.
 - Reused split hash: `437a7bad6610b5f84888149ab6416b5f61ae1e28a5db6d2bda1e0c17aafd0e63`.
 - Train-only delta-marker normalization: mean `-0.0036338853887569757`, std `0.3478502683947113`.
-- Formal encoder pretraining is running on GPU 3 in isolated run `dynamic_v2_stride2_20260910/runs/encoder_dynamic_v2_hdmi_stride2`; PID `2722245`.
-- The encoder smoke artifacts were deleted after the formal process and GPU workload were verified live.
+- Formal encoder pretraining completed 3320 steps over five epochs in 607.38 seconds; best validation loss `0.059451635863821385`.
+- Encoder checkpoint SHA256: `d33fc034d47af4b05541f1813c7e6fb047d090983dfb34d3faef4c07299ed115`; strict reload verified T=4, stride=2 metadata.
+- Formal ACT policy training is running on GPU 3 in isolated run `dynamic_v2_stride2_20260910/runs/policy_dynamic_v2_hdmi_stride2`; PID `818339`.
+- First formal update verified: optimizer update 1, micro-iterations 2, physical batch 32 × accumulation 2, effective batch 64, and three learning rates at `1e-5`.
+- Encoder, ACT-interface, and three-step simulator smoke artifacts were deleted after the formal workloads were verified live.
