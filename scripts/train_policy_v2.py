@@ -26,7 +26,9 @@ def validate_training_contract(cfg, *, smoke, smoke_batch, optimizer_group_lrs=N
  encoder_type=cfg.get('tactile_encoder_type','detail_v2')
  if encoder_type not in ('detail_v2','detail_v2_dynamic'):raise ValueError(f'Unsupported tactile encoder type: {encoder_type!r}')
  if cfg.get('tactile_type')!='feat':raise ValueError('Canonical V2 tactile encoders require tactile_type=feat')
- if encoder_type=='detail_v2_dynamic' and (cfg.get('tactile_sequence_length')!=4 or cfg.get('tactile_temporal_stride')!=1):raise ValueError('Dynamic V2 requires tactile temporal metadata length=4 stride=1')
+ if encoder_type=='detail_v2_dynamic':
+  stride=cfg.get('tactile_temporal_stride')
+  if cfg.get('tactile_sequence_length')!=4 or type(stride) is not int or stride not in (1,2):raise ValueError('Dynamic V2 requires tactile temporal metadata length=4 and stride=1 or 2')
  if optimizer_group_lrs is not None:
   if len(optimizer_group_lrs)!=3:raise ValueError('Protocol requires exactly three optimizer groups')
   if any(value!=1e-5 for value in optimizer_group_lrs):raise ValueError('Protocol requires every optimizer group LR=1e-5')

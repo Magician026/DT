@@ -40,6 +40,7 @@ _DYNAMIC_DETAIL_V2_STRUCTURE = {
     "temporal_stride": 1,
     "initial_gate": 0.15,
 }
+_DYNAMIC_TEMPORAL_STRIDES = (1, 2)
 _DYNAMIC_NEW_STATE_KEYS = {
     "dynamic_attention.in_proj_bias",
     "dynamic_attention.in_proj_weight",
@@ -66,6 +67,22 @@ def _validate_base_structure(backbone: str, input_channels: int, latent_dims: in
         raise ValueError(
             "unsupported encoder structure: expected resnet18, three input "
             "channels, and a 512-D output"
+        )
+
+
+def _validate_dynamic_structure(structure: Mapping[str, Any]) -> None:
+    candidate = dict(structure)
+    temporal_stride = candidate.get("temporal_stride")
+    candidate["temporal_stride"] = _DYNAMIC_DETAIL_V2_STRUCTURE["temporal_stride"]
+    if (
+        type(temporal_stride) is not int
+        or temporal_stride not in _DYNAMIC_TEMPORAL_STRIDES
+        or candidate != _DYNAMIC_DETAIL_V2_STRUCTURE
+    ):
+        raise ValueError(
+            "unsupported detail_v2_dynamic structure; expected the canonical "
+            "structure with temporal_stride in (1, 2), got "
+            f"{dict(structure)}"
         )
 
 
@@ -307,11 +324,7 @@ class DynamicDetailV2Encoder(DetailV2Encoder):
             "temporal_stride": temporal_stride,
             "initial_gate": float(initial_gate),
         }
-        if structure != _DYNAMIC_DETAIL_V2_STRUCTURE:
-            raise ValueError(
-                "unsupported detail_v2_dynamic structure; expected "
-                f"{_DYNAMIC_DETAIL_V2_STRUCTURE}, got {structure}"
-            )
+        _validate_dynamic_structure(structure)
 
         super().__init__(
             backbone=backbone,
@@ -692,18 +705,20 @@ def load_encoder_checkpoint(
     structure = checkpoint["structure"]
     if not isinstance(structure, Mapping):
         raise TypeError("checkpoint structure must be a mapping")
-    expected_structure = {
-        "original": _ORIGINAL_STRUCTURE,
-        "detail_v2": _DETAIL_V2_STRUCTURE,
-        "detail_v2_dynamic": _DYNAMIC_DETAIL_V2_STRUCTURE,
-    }.get(encoder_type)
-    if expected_structure is None:
-        raise ValueError(f"unsupported encoder_type: {encoder_type}")
-    if dict(structure) != expected_structure:
-        raise ValueError(
-            f"unsupported {encoder_type} structure: expected "
-            f"{expected_structure}, got {dict(structure)}"
-        )
+    if encoder_type == "detail_v2_dynamic":
+        _validate_dynamic_structure(structure)
+    else:
+        expected_structure = {
+            "original": _ORIGINAL_STRUCTURE,
+            "detail_v2": _DETAIL_V2_STRUCTURE,
+        }.get(encoder_type)
+        if expected_structure is None:
+            raise ValueError(f"unsupported encoder_type: {encoder_type}")
+        if dict(structure) != expected_structure:
+            raise ValueError(
+                f"unsupported {encoder_type} structure: expected "
+                f"{expected_structure}, got {dict(structure)}"
+            )
 
     encoder = build_encoder(encoder_type, **dict(structure))
     encoder_state = checkpoint["encoder_state"]

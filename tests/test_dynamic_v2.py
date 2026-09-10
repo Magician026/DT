@@ -273,3 +273,26 @@ def test_dynamic_checkpoint_roundtrips_strictly(tmp_path: Path):
     malformed["encoder_state"].pop("gate_logit")
     with pytest.raises(RuntimeError, match="state_dict"):
         load_encoder_checkpoint(malformed)
+
+
+def test_dynamic_stride2_checkpoint_roundtrips_with_exact_metadata(tmp_path: Path):
+    torch.manual_seed(31)
+    encoder = build_encoder("detail_v2_dynamic", temporal_stride=2).eval()
+    inputs = torch.randn(1, 4, 3, 64, 64)
+    with torch.no_grad():
+        expected = encoder(inputs)
+
+    path = tmp_path / "dynamic_encoder_stride2.pt"
+    save_encoder_checkpoint(path, encoder, PREPROCESS)
+    loaded, metadata = load_encoder_checkpoint(
+        path,
+        expected_encoder_type="detail_v2_dynamic",
+        expected_preprocess=PREPROCESS,
+    )
+    loaded.eval()
+    with torch.no_grad():
+        actual = loaded(inputs)
+
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    assert metadata["structure"]["sequence_length"] == 4
+    assert metadata["structure"]["temporal_stride"] == 2

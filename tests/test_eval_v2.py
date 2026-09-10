@@ -150,7 +150,12 @@ def _write_eval_script(path: Path):
     )
 
 
-def _runtime_fixture(tmp_path: Path, *, encoder_type="detail_v2"):
+def _runtime_fixture(
+    tmp_path: Path,
+    *,
+    encoder_type="detail_v2",
+    temporal_stride=1,
+):
     external = tmp_path / "official"
     (external / "scripts").mkdir(parents=True)
     (external / "envs").mkdir()
@@ -179,7 +184,10 @@ def _runtime_fixture(tmp_path: Path, *, encoder_type="detail_v2"):
         torch.save(
             {
                 "encoder_type": "detail_v2_dynamic",
-                "structure": {"sequence_length": 4, "temporal_stride": 1},
+                "structure": {
+                    "sequence_length": 4,
+                    "temporal_stride": temporal_stride,
+                },
             },
             tactile_checkpoint,
         )
@@ -204,8 +212,14 @@ def _runtime_fixture(tmp_path: Path, *, encoder_type="detail_v2"):
         "tactile_encoder_type": encoder_type,
     }
     if encoder_type == "detail_v2_dynamic":
-        config.update(tactile_sequence_length=4, tactile_temporal_stride=1)
-        completion.update(tactile_sequence_length=4, tactile_temporal_stride=1)
+        config.update(
+            tactile_sequence_length=4,
+            tactile_temporal_stride=temporal_stride,
+        )
+        completion.update(
+            tactile_sequence_length=4,
+            tactile_temporal_stride=temporal_stride,
+        )
     (policy_run / "train_config.yml").write_text(yaml.safe_dump(config))
     (policy_run / "completion.json").write_text(json.dumps(completion))
     seeds = tmp_path / "seeds.json"
@@ -243,6 +257,27 @@ def test_prepare_accepts_dynamic_encoder_and_rejects_temporal_metadata_drift(tmp
             gpu="1",
             seeds_path=seeds,
         )
+
+
+def test_prepare_accepts_consistent_stride2_dynamic_metadata(tmp_path):
+    external, source, policy_run, seeds = _runtime_fixture(
+        tmp_path,
+        encoder_type="detail_v2_dynamic",
+        temporal_stride=2,
+    )
+
+    prepared = prepare_runtime(
+        external_runtime=external,
+        source=source,
+        policy_run=policy_run,
+        out=tmp_path / "dynamic_stride2_eval",
+        gpu="1",
+        seeds_path=seeds,
+    )
+
+    assert prepared["tactile_encoder_type"] == "detail_v2_dynamic"
+    assert prepared["tactile_sequence_length"] == 4
+    assert prepared["tactile_temporal_stride"] == 2
 
 
 def test_prepare_creates_isolated_official_runtime_with_only_requested_overlays(tmp_path):

@@ -98,11 +98,15 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
             "tactile_sequence_length": config.get("tactile_sequence_length"),
             "tactile_temporal_stride": config.get("tactile_temporal_stride"),
         }
-        if temporal_metadata != {
-            "tactile_sequence_length": 4,
-            "tactile_temporal_stride": 1,
-        }:
-            raise ValueError("dynamic tactile temporal metadata must be length=4 stride=1")
+        temporal_stride = temporal_metadata["tactile_temporal_stride"]
+        if (
+            temporal_metadata["tactile_sequence_length"] != 4
+            or type(temporal_stride) is not int
+            or temporal_stride not in (1, 2)
+        ):
+            raise ValueError(
+                "dynamic tactile temporal metadata must be length=4 and stride=1 or 2"
+            )
         if any(completion.get(key) != value for key, value in temporal_metadata.items()):
             raise ValueError("dynamic tactile temporal metadata differs from completion")
         if completion.get("tactile_encoder_type") != encoder_type:

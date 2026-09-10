@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 import sys
 from argparse import Namespace
@@ -292,3 +293,46 @@ def test_formal_dynamic_config_preserves_act_and_optimizer_contract():
             smoke_batch=2,
             optimizer_group_lrs=[1e-5, 1e-5],
         )
+
+
+def test_stride2_variant_changes_only_temporal_stride():
+    encoder_base = json.loads(
+        (PROJECT_ROOT / "configs/encoder_dynamic_v2_hdmi.json").read_text()
+    )
+    encoder_stride2 = json.loads(
+        (PROJECT_ROOT / "configs/encoder_dynamic_v2_hdmi_stride2.json").read_text()
+    )
+    encoder_changed = {
+        key
+        for key in encoder_base.keys() | encoder_stride2.keys()
+        if encoder_base.get(key) != encoder_stride2.get(key)
+    }
+    assert encoder_changed == {"temporal_stride"}
+    assert encoder_stride2["sequence_length"] == 4
+    assert encoder_stride2["temporal_stride"] == 2
+
+    policy_base = yaml.safe_load(
+        (PROJECT_ROOT / "configs/policy_dynamic_v2_hdmi.yml").read_text()
+    )
+    policy_stride2 = yaml.safe_load(
+        (PROJECT_ROOT / "configs/policy_dynamic_v2_hdmi_stride2.yml").read_text()
+    )
+    policy_changed = {
+        key
+        for key in policy_base.keys() | policy_stride2.keys()
+        if policy_base.get(key) != policy_stride2.get(key)
+    }
+    assert policy_changed == {"tactile_temporal_stride"}
+    assert policy_stride2["tactile_sequence_length"] == 4
+    assert policy_stride2["tactile_temporal_stride"] == 2
+    assert train_policy_v2.validate_training_contract(
+        policy_stride2,
+        smoke=False,
+        smoke_batch=2,
+        optimizer_group_lrs=[1e-5, 1e-5, 1e-5],
+    ) == {
+        "optimizer_updates": 4000,
+        "physical_batch": 32,
+        "gradient_accumulation": 2,
+        "effective_batch": 64,
+    }
