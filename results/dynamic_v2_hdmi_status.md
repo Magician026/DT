@@ -36,5 +36,6 @@ Updated: 2026-09-10 (Asia/Singapore)
 - Completion contract verified: 4000 optimizer updates, 8000 micro-iterations, physical batch 32 × accumulation 2, and three optimizer groups at `1e-5`.
 - Policy checkpoint SHA256: `ebff7456160dd312af30cf350edbdafa27da6a93fdb758148f6eecc91547e40a`
 - Strict policy checkpoint reload passed; validation loss decreased from `0.170235889` at step 500 to `0.087586921` at step 4000.
-- Quick triage on seeds 1000000–1000019 is running on GPU 3; full seeds 1000000–1000099 remain gated on a materially positive quick result.
+- Quick triage completed on seeds 1000000–1000019: 5/20 successes (25%), with 20 valid episodes and zero infrastructure errors.
+- Per user direction, the isolated full evaluation on seeds 1000000–1000099 started on GPU 3 at 2026-09-10 19:00 Asia/Singapore; launcher PID `3852152`, Isaac child PID `3856078`.
 - Historical Spatial V2 HDMI outcomes use seeds 0–99; they are not treated as paired evidence for the required million-seed set.
