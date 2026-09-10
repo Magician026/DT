@@ -1,0 +1,48 @@
+{
+  "active_heads": [
+    "depth"
+  ],
+  "marker_exclusion_reason": "reference semantics unverified; target disabled by P0 rule B",
+  "split_hash": "437a7bad6610b5f84888149ab6416b5f61ae1e28a5db6d2bda1e0c17aafd0e63",
+  "files": 100,
+  "total_sensor_frames": 40452,
+  "normalization": {
+    "depth": {
+      "mean": 30.905175959407917,
+      "std": 3.026373675498137,
+      "count": 286464000,
+      "statistics_frame_stride": 10,
+      "source": "train_only"
+    }
+  },
+  "preprocess": {
+    "sensor": "gsmini",
+    "field": "rgb_marker",
+    "channels": "native_cv2_decode_no_swap",
+    "input_dtype": "uint8",
+    "scale": 255.0,
+    "image_size": [
+      256,
+      256
+    ],
+    "resize": "torchvision_bilinear_antialias",
+    "normalization": "none"
+  },
+  "policy": {
+    "episodes": 50,
+    "total_frames": 10114,
+    "qpos_range": [
+      -2.4249155521392822,
+      2.8913044929504395
+    ],
+    "action_range": [
+      -2.4249155521392822,
+      2.891056776046753
+    ],
+    "image_correspondence_check": {
+      "clean0_act0_max_abs": 0,
+      "clean0_act0_mean_abs": 0.0
+    },
+    "split": "separate ACT protocol, no encoder/policy split equivalence claimed"
+  }
+}
