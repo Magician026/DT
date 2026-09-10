@@ -50,3 +50,11 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Quick-eval outcomes SHA256: `398a943ff0374e5dc4524ae07517259bb23cd632dccf691723fd3a285bc132f5`; completion verifies source commit `585d40e5ac237b3e107f1a9c66407f6e65da45fb`, T=4 stride=2, formal `policy_last.ckpt`, and the expected checkpoint/stat/encoder SHA256 values.
 - Variant A is stopped without a full-100 evaluation because it is materially worse than Dynamic stride-1 quick (`5/20`). The final bounded iteration will return to stride 1 and change only the Dynamic contribution gate initialization from `0.15` to `0.30`.
 - Encoder, ACT-interface, and three-step simulator smoke artifacts were deleted after the formal workloads were verified live.
+
+## Variant B — T=4, stride 1, initial dynamic gate 0.30
+
+- Source release: `ddd36406b8c7d5e98dd4f39610f3c5943d3d391b`; relative to Dynamic stride-1, the only experiment factor is dynamic gate initialization `0.15 → 0.30`.
+- Local regression suite: 88 passed, including exact gate checkpoint roundtrip and semantic config-diff checks.
+- Reuses the original stride-1 split, train-only normalization, T=4 stride-1 sampling, `λ_dynamic=0.5`, Spatial V2 warm-start, and unchanged policy recipe.
+- Encoder smoke passed 50 updates with strict checkpoint reload and nonzero dynamic-attention/gate gradients; its runtime artifacts were deleted after formal launch.
+- Formal encoder pretraining is running on GPU 1 in isolated run `dynamic_v2_gate30_20260911/runs/encoder_dynamic_v2_hdmi_gate30`; PID `912194`.
