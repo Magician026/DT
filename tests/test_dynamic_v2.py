@@ -296,3 +296,19 @@ def test_dynamic_stride2_checkpoint_roundtrips_with_exact_metadata(tmp_path: Pat
     torch.testing.assert_close(actual, expected, rtol=0, atol=0)
     assert metadata["structure"]["sequence_length"] == 4
     assert metadata["structure"]["temporal_stride"] == 2
+
+
+def test_dynamic_gate30_checkpoint_roundtrips_with_exact_gate(tmp_path: Path):
+    encoder = build_encoder("detail_v2_dynamic", initial_gate=0.30).eval()
+    assert torch.sigmoid(encoder.gate_logit).item() == pytest.approx(0.30)
+
+    path = tmp_path / "dynamic_encoder_gate30.pt"
+    save_encoder_checkpoint(path, encoder, PREPROCESS)
+    loaded, metadata = load_encoder_checkpoint(
+        path,
+        expected_encoder_type="detail_v2_dynamic",
+        expected_preprocess=PREPROCESS,
+    )
+
+    assert torch.sigmoid(loaded.gate_logit).item() == pytest.approx(0.30)
+    assert metadata["structure"]["initial_gate"] == 0.30

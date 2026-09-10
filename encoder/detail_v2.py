@@ -73,15 +73,20 @@ def _validate_base_structure(backbone: str, input_channels: int, latent_dims: in
 def _validate_dynamic_structure(structure: Mapping[str, Any]) -> None:
     candidate = dict(structure)
     temporal_stride = candidate.get("temporal_stride")
+    initial_gate = candidate.get("initial_gate")
     candidate["temporal_stride"] = _DYNAMIC_DETAIL_V2_STRUCTURE["temporal_stride"]
+    candidate["initial_gate"] = _DYNAMIC_DETAIL_V2_STRUCTURE["initial_gate"]
     if (
         type(temporal_stride) is not int
         or temporal_stride not in _DYNAMIC_TEMPORAL_STRIDES
+        or not isinstance(initial_gate, (int, float))
+        or not math.isfinite(float(initial_gate))
+        or not 0.0 < float(initial_gate) < 1.0
         or candidate != _DYNAMIC_DETAIL_V2_STRUCTURE
     ):
         raise ValueError(
             "unsupported detail_v2_dynamic structure; expected the canonical "
-            "structure with temporal_stride in (1, 2), got "
+            "structure with temporal_stride in (1, 2) and 0 < initial_gate < 1, got "
             f"{dict(structure)}"
         )
 
