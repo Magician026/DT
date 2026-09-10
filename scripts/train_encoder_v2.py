@@ -5,14 +5,41 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader,Subset
 from encoder.clean_v2 import CleanDataset,PREPROCESS,manifest_hash
-from encoder.detail_v2 import build_encoder,save_encoder_checkpoint,load_encoder_checkpoint
+from encoder.dynamic_data import DynamicCleanDataset
+from encoder.detail_v2 import build_encoder,save_encoder_checkpoint,load_encoder_checkpoint,warm_start_dynamic_encoder
 from encoder.pretrain_v2 import P0Model
 
 def atomic_json(path,value):
  path=Path(path);temp=path.with_suffix('.tmp');temp.write_text(json.dumps(value,indent=2));temp.replace(path)
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def validate_dynamic_audit(cfg,audit):
+ if cfg['encoder_type']!='detail_v2_dynamic':return
+ expected={'sequence_length':cfg['sequence_length'],'temporal_stride':cfg['temporal_stride']}
+ if audit.get('history')!=expected:raise ValueError(f'dynamic audit history mismatch: expected {expected}, got {audit.get("history")}')
+ for name in ('depth','marker','delta_marker'):
+  statistics=audit.get('normalization',{}).get(name)
+  if not isinstance(statistics,dict):raise ValueError(f'dynamic audit missing {name} normalization')
+  if statistics.get('source')!='train_only':raise ValueError(f'dynamic audit {name} normalization must be train-only')
+  if statistics.get('statistics_frame_stride')!=10:raise ValueError(f'dynamic audit {name} statistics stride must be 10')
+  if not isinstance(statistics.get('count'),int) or statistics['count']<=0:raise ValueError(f'dynamic audit {name} count must be positive')
+  if not np.isfinite(statistics.get('mean')) or not np.isfinite(statistics.get('std')) or statistics['std']<=0:raise ValueError(f'dynamic audit {name} statistics must be finite with positive std')
+def initialize_encoder(cfg,*,spatial_init,spatial_source_commit,trunk_init=None):
+ encoder_type=cfg['encoder_type']
+ if encoder_type=='detail_v2_dynamic':
+  if spatial_init is None:raise ValueError('detail_v2_dynamic requires --spatial-init')
+  if not spatial_source_commit:raise ValueError('detail_v2_dynamic requires --spatial-source-commit')
+  if trunk_init is not None:raise ValueError('detail_v2_dynamic uses --spatial-init, not --trunk-init')
+  source=Path(spatial_init).resolve()
+  if not source.is_file():raise FileNotFoundError(source)
+  source_sha256=sha(source)
+  structure={k:cfg[k] for k in ('sequence_length','temporal_stride','token_dim','num_heads','attention_dropout','initial_gate') if k in cfg}
+  encoder,report=warm_start_dynamic_encoder(source,**structure)
+  if sha(source)!=source_sha256:raise RuntimeError('Spatial V2 source changed during warm-start')
+  return encoder,{'spatial_init':str(source),'spatial_init_sha256':source_sha256,'spatial_source_commit':spatial_source_commit,'warm_start_report':report}
+ trunk_state=torch.load(trunk_init,weights_only=True) if trunk_init else None
+ return build_encoder(encoder_type,trunk_state=trunk_state),{}
 def main():
- p=argparse.ArgumentParser();p.add_argument('--config',required=True);p.add_argument('--clean',required=True);p.add_argument('--data-audit',required=True);p.add_argument('--split',required=True);p.add_argument('--out',required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--probe',action='store_true');p.add_argument('--source-commit');p.add_argument('--trunk-init');p.add_argument('--resume',action='store_true');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--config',required=True);p.add_argument('--clean',required=True);p.add_argument('--data-audit',required=True);p.add_argument('--split',required=True);p.add_argument('--out',required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--probe',action='store_true');p.add_argument('--source-commit');p.add_argument('--trunk-init');p.add_argument('--spatial-init');p.add_argument('--spatial-source-commit');p.add_argument('--resume',action='store_true');a=p.parse_args()
  cfg=json.loads(Path(a.config).read_text());cfg['source_commit']=a.source_commit or cfg['source_commit'];out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
  import fcntl
  lock=open(out/'run.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -20,20 +47,25 @@ def main():
  if (out/'last_state.pt').exists() and not a.resume:raise RuntimeError('Use --resume for existing run')
  random.seed(cfg['seed']);np.random.seed(cfg['seed']);torch.manual_seed(cfg['seed']);torch.set_num_threads(4)
  audit=json.loads(Path(a.data_audit).read_text());split=json.loads(Path(a.split).read_text());assert audit['split_hash']==manifest_hash(split)
+ validate_dynamic_audit(cfg,audit)
  cfg.update(split_hash=audit['split_hash'],normalization=audit['normalization'],preprocess=PREPROCESS,run_id=out.name,pid=os.getpid(),smoke=a.smoke,probe=a.probe,data_audit_sha256=sha(a.data_audit))
  assert cfg['weights']=={k:1.0 for k in cfg['active_heads']},'P0 fixes all active weights to 1'
  assert set(cfg['active_heads']) <= {'depth','marker'},'This audited P0 supports contact targets only'
+ encoder,initialization=initialize_encoder(cfg,spatial_init=a.spatial_init,spatial_source_commit=a.spatial_source_commit,trunk_init=a.trunk_init)
+ cfg.update(initialization)
  contract={k:v for k,v in cfg.items() if k not in ('pid','source_commit')}
  contract_hash=manifest_hash(contract)
  if a.resume:
   previous=json.loads((out/'resolved_config.json').read_text());assert previous.get('contract_hash')==contract_hash,'Resume contract changed'
  cfg['contract_hash']=contract_hash
  atomic_json(out/'resolved_config.json',cfg)
- trunk_state=torch.load(a.trunk_init,weights_only=True) if a.trunk_init else None
- encoder=build_encoder(cfg['encoder_type'],trunk_state=trunk_state);model=P0Model(encoder,cfg['active_heads']).cuda()
+ model=P0Model(encoder,cfg['active_heads'],dynamic_weight=cfg.get('dynamic_weight') if cfg['encoder_type']=='detail_v2_dynamic' else None).cuda()
  trunk=encoder.export_trunk_state();init=out/'shared_trunk_init.pt';temp=init.with_suffix('.tmp');torch.save(trunk,temp);temp.replace(init);cfg['shared_trunk_sha256']=sha(init)
  optimizer=torch.optim.AdamW(model.parameters(),lr=cfg['lr'],weight_decay=cfg['weight_decay'])
- datasets={s:CleanDataset(a.clean,split[s],cfg['active_heads'],audit['normalization'],stride=cfg['frame_stride']) for s in ('train','val')}
+ if cfg['encoder_type']=='detail_v2_dynamic':
+  datasets={s:DynamicCleanDataset(a.clean,split[s],audit['normalization'],stride=cfg['frame_stride'],sequence_length=cfg['sequence_length'],temporal_stride=cfg['temporal_stride']) for s in ('train','val')}
+ else:
+  datasets={s:CleanDataset(a.clean,split[s],cfg['active_heads'],audit['normalization'],stride=cfg['frame_stride']) for s in ('train','val')}
  if a.smoke:
   ids=np.linspace(0,len(datasets['train'])-1,8,dtype=int).tolist();datasets['train']=Subset(datasets['train'],ids)
  loaders={s:DataLoader(ds,batch_size=8 if a.smoke else cfg['batch_size'],shuffle=s=='train',num_workers=0 if a.smoke else cfg['workers'],pin_memory=True,drop_last=False) for s,ds in datasets.items()}
@@ -82,5 +114,5 @@ def main():
  last,_=load_encoder_checkpoint(out/'last.pt',expected_encoder_type=cfg['encoder_type'],expected_preprocess=PREPROCESS);last=last.cuda().eval()
  check_x=next(iter(loaders['val']))[0].cuda()
  with torch.no_grad():torch.testing.assert_close(last(check_x),encoder.eval()(check_x),rtol=0,atol=0)
- atomic_json(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':cfg['source_commit'],'encoder_type':cfg['encoder_type'],'steps':step,'best_val':best,'checkpoint':'best.pt','checkpoint_sha256':sha(out/'best.pt'),'split_hash':cfg['split_hash'],'elapsed':time.time()-t0,'smoke':a.smoke,'probe':a.probe,'overfit_first5':float(np.mean(curve[:5])) if curve else None,'overfit_last5':float(np.mean(curve[-5:])) if curve else None,'contract_hash':contract_hash})
+ atomic_json(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':cfg['source_commit'],'encoder_type':cfg['encoder_type'],'steps':step,'best_val':best,'checkpoint':'best.pt','checkpoint_sha256':sha(out/'best.pt'),'split_hash':cfg['split_hash'],'elapsed':time.time()-t0,'smoke':a.smoke,'probe':a.probe,'overfit_first5':float(np.mean(curve[:5])) if curve else None,'overfit_last5':float(np.mean(curve[-5:])) if curve else None,'contract_hash':contract_hash,**initialization})
 if __name__=='__main__':main()

@@ -1,0 +1,36 @@
+{
+  "task": "insert_HDMI",
+  "encoder_type": "detail_v2_dynamic",
+  "seed": 42,
+  "active_heads": [
+    "depth",
+    "marker"
+  ],
+  "weights": {
+    "depth": 1.0,
+    "marker": 1.0
+  },
+  "target_meaning": {
+    "depth": "current sensor camera axial depth in mm, tactile/{side}_gsmini/depth, [240,320]",
+    "marker": "current frame-local marker displacement, marker[1]-marker[0], [1200,2]",
+    "delta_marker": "anchor displacement minus displacement(max(0, anchor-temporal_stride)), [1200,2]"
+  },
+  "loss": "L_depth + L_marker + 0.5 * L_delta_marker in train-statistic normalized coordinates",
+  "normalization": "fixed train-only mean/std; statistics frame stride 10; all pixels/markers and both sensors",
+  "initialization": "strict canonical Spatial V2 encoder checkpoint supplied by --spatial-init with --spatial-source-commit",
+  "sequence_length": 4,
+  "temporal_stride": 1,
+  "token_dim": 256,
+  "num_heads": 4,
+  "attention_dropout": 0.0,
+  "initial_gate": 0.15,
+  "dynamic_weight": 0.5,
+  "lr": 0.0001,
+  "weight_decay": 0.0001,
+  "batch_size": 32,
+  "workers": 4,
+  "frame_stride": 1,
+  "epochs": 5,
+  "checkpoint_selection": "minimum full validation P0 loss after each epoch",
+  "source_commit": null
+}
