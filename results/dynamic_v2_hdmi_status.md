@@ -43,6 +43,9 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Train-only delta-marker normalization: mean `-0.0036338853887569757`, std `0.3478502683947113`.
 - Formal encoder pretraining completed 3320 steps over five epochs in 607.38 seconds; best validation loss `0.059451635863821385`.
 - Encoder checkpoint SHA256: `d33fc034d47af4b05541f1813c7e6fb047d090983dfb34d3faef4c07299ed115`; strict reload verified T=4, stride=2 metadata.
-- Formal ACT policy training is running on GPU 3 in isolated run `dynamic_v2_stride2_20260910/runs/policy_dynamic_v2_hdmi_stride2`; PID `818339`.
-- First formal update verified: optimizer update 1, micro-iterations 2, physical batch 32 × accumulation 2, effective batch 64, and three learning rates at `1e-5`.
+- Formal ACT policy training completed 4000 optimizer updates / 8000 micro-iterations in 3681.10 seconds with physical batch 32 × accumulation 2, effective batch 64, and all three learning rates at `1e-5`.
+- Policy checkpoint SHA256: `02d2dda3fa2901f4ab4d44d9e68aeddf0be9eec1f0516a8423c29eb4fd6e52a5`; dataset stats SHA256: `9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b`.
+- Strict ACT checkpoint reload passed with zero missing or unexpected keys; validation loss decreased from `0.172873404` at step 500 to `0.089168837` at step 4000.
+- Quick triage is running on the fixed seeds 1000000–1000019 in isolated run `dynamic_v2_stride2_20260910/runs/eval_quick20_dynamic_v2_hdmi_stride2`; launched on an idle GPU 3 with launcher PID `898611` and Isaac child PID `900487`.
+- Quick-eval manifest verifies source commit `585d40e5ac237b3e107f1a9c66407f6e65da45fb`, T=4 stride=2, formal `policy_last.ckpt`, 4000 optimizer updates, and the expected checkpoint/stat/encoder SHA256 values.
 - Encoder, ACT-interface, and three-step simulator smoke artifacts were deleted after the formal workloads were verified live.
