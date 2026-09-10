@@ -34,3 +34,12 @@ Updated: 2026-09-10 (Asia/Singapore)
 - Result is +1 absolute point versus UniVTAC B0 (28/100), -2 points versus Spatial V2 (31/100), and below the minimum Dynamic V2 target of 33/100.
 - The next bounded iteration is Variant A: retain the architecture and training recipe, changing only T=4 temporal stride from 1 to 2.
 - Historical Spatial V2 HDMI outcomes use seeds 0–99; they are not treated as paired evidence for the required million-seed set.
+
+## Variant A — T=4, temporal stride 2
+
+- Source release: `585d40e5ac237b3e107f1a9c66407f6e65da45fb`; the only experiment factor changed from Dynamic V2 is temporal stride 1 to 2.
+- Local regression suite: 86 passed, including strict stride-2 encoder checkpoint reload, ACT contract, and eval metadata consistency.
+- Reused split hash: `437a7bad6610b5f84888149ab6416b5f61ae1e28a5db6d2bda1e0c17aafd0e63`.
+- Train-only delta-marker normalization: mean `-0.0036338853887569757`, std `0.3478502683947113`.
+- Formal encoder pretraining is running on GPU 3 in isolated run `dynamic_v2_stride2_20260910/runs/encoder_dynamic_v2_hdmi_stride2`; PID `2722245`.
+- The encoder smoke artifacts were deleted after the formal process and GPU workload were verified live.
