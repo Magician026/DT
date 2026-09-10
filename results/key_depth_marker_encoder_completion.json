@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "run_id": "encoder",
+  "source_commit": "4460420f6d475c9570d1d103ef7157ffd960b27a",
+  "encoder_type": "detail_v2",
+  "steps": 5700,
+  "best_val": 0.03970247992929844,
+  "checkpoint": "best.pt",
+  "checkpoint_sha256": "87f66f8e7ca0825c8db1cf9ee211f311e6f01093b2f901afb437dc4d24b44fe9",
+  "split_hash": "437a7bad6610b5f84888149ab6416b5f61ae1e28a5db6d2bda1e0c17aafd0e63",
+  "elapsed": 504.8878929615021,
+  "smoke": false,
+  "probe": false,
+  "overfit_first5": 1.7426839828491212,
+  "overfit_last5": 0.04635339602828026,
+  "contract_hash": "cb7ccd4db56dbafaf80237e5d155aa200ab340e99d8f0cd3c21e675979f336f1"
+}

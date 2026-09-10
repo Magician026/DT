@@ -16,3 +16,11 @@ Real `clean/10.hdf5` right sensor frames131/132/133 contain63/61/58 distinct pre
 Correction changes only the audit invariant: validate frame-local paired shape/finite values and record cross-frame reference-slot changes. Loader still uses exactly `marker[1]-marker[0]`, all1200 entries, train-only mean/std and equally weighted normalized MSE with depth. Same V2 architecture, five epochs, batch32, LR1e-4, encoder seed821018648; same ACT4000updates/physical32×2/policy seed0; formal100 seeds1000000–1000099. Separate `key_depth_marker_seed0` directory under the canonical server root. No depth-only checkpoints are reused.
 
 Validation: synthetic visibility-drop/repeat-padding regression and invalid marker tests2passed; full data audit must finish before encoder launch. No outcome-dependent hyperparameter selection.
+
+## Corrected run: encoder completed
+
+Verified 2026-09-10 06:41 UTC: formal depth+marker encoder completed 5 epochs / 5700 updates, best validation loss 0.03970248. Encoder SHA256: `87f66f8e7ca0825c8db1cf9ee211f311e6f01093b2f901afb437dc4d24b44fe9`. Source: `4460420f6d475c9570d1d103ef7157ffd960b27a`.
+
+Policy smoke and 30-action simulation smoke passed (30 distinct tactile observations). Formal policy seed 0 is running on GPU 2, PID 2632718, observed 2700/4000 updates; no formal evaluation result yet. Controller PID 1747332 will launch 100 rollouts after verified policy completion.
+
+Server root: `/usr1/home/s126mdg41_04/UniVTAC details v2/key_depth_marker_seed0`; policy log: `runs/pull_out_key/policy_seed0.log`.
