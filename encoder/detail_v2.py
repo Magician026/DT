@@ -47,14 +47,12 @@ _DYNAMIC_NEW_STATE_KEYS = {
     "dynamic_attention.out_proj.weight",
     "dynamic_projection.0.bias",
     "dynamic_projection.0.weight",
+    "dynamic_token_norm.bias",
+    "dynamic_token_norm.weight",
     "fusion_norm.bias",
     "fusion_norm.weight",
     "gate_logit",
     "temporal_encoding",
-    "temporal_residual_projection.0.bias",
-    "temporal_residual_projection.0.weight",
-    "temporal_residual_projection.1.bias",
-    "temporal_residual_projection.1.weight",
 }
 _ORIGINAL_STRUCTURE = {
     "backbone": "resnet18",
@@ -327,10 +325,7 @@ class DynamicDetailV2Encoder(DetailV2Encoder):
         )
         self.structure = copy.deepcopy(structure)
         transition_count = sequence_length - 1
-        self.temporal_residual_projection = nn.Sequential(
-            nn.Linear(128, token_dim),
-            nn.LayerNorm(token_dim),
-        )
+        self.dynamic_token_norm = nn.LayerNorm(token_dim)
         self.temporal_encoding = nn.Parameter(
             torch.zeros(transition_count, token_dim)
         )
@@ -396,8 +391,9 @@ class DynamicDetailV2Encoder(DetailV2Encoder):
             device=layer2_flat.device,
             dtype=layer2_flat.dtype,
         )
-        static_tokens = current_layer2.flatten(2).transpose(1, 2)
-        static_tokens = self.local_projection(static_tokens) + position
+        layer2_tokens = layer2_sequence.flatten(3).permute(0, 1, 3, 2)
+        projected_tokens = self.local_projection(layer2_tokens)
+        static_tokens = projected_tokens[:, -1] + position
         detail_static, _ = self.cross_attention(
             query,
             static_tokens,
@@ -406,9 +402,8 @@ class DynamicDetailV2Encoder(DetailV2Encoder):
         )
         detail_static = self.detail_projection(detail_static.squeeze(1))
 
-        residuals = layer2_sequence[:, 1:] - layer2_sequence[:, :-1]
-        residual_tokens = residuals.flatten(3).permute(0, 1, 3, 2)
-        residual_tokens = self.temporal_residual_projection(residual_tokens)
+        residual_tokens = projected_tokens[:, 1:] - projected_tokens[:, :-1]
+        residual_tokens = self.dynamic_token_norm(residual_tokens)
         residual_tokens = residual_tokens + position.unsqueeze(1)
         residual_tokens = residual_tokens + self.temporal_encoding.view(
             1,
