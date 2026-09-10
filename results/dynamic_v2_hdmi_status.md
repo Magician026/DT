@@ -57,4 +57,7 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Local regression suite: 88 passed, including exact gate checkpoint roundtrip and semantic config-diff checks.
 - Reuses the original stride-1 split, train-only normalization, T=4 stride-1 sampling, `λ_dynamic=0.5`, Spatial V2 warm-start, and unchanged policy recipe.
 - Encoder smoke passed 50 updates with strict checkpoint reload and nonzero dynamic-attention/gate gradients; its runtime artifacts were deleted after formal launch.
-- Formal encoder pretraining is running on GPU 1 in isolated run `dynamic_v2_gate30_20260911/runs/encoder_dynamic_v2_hdmi_gate30`; PID `912194`.
+- Formal encoder pretraining completed 3320 steps over five epochs in 1166.38 seconds; best validation loss `0.06920082144818064`.
+- Encoder checkpoint SHA256: `21418c8f34d38564966cdd02db21a2929f2dce9164f404f933be6408756b5791`; strict reload verified T=4, stride=1, initial gate `0.30`, and learned gate `0.2949721813`.
+- ACT policy smoke passed two optimizer updates with nonzero Dynamic gradients, unchanged three-group LR contract, and FrozenBatchNorm behavior.
+- The required three-action simulator smoke is waiting for a completely idle GPU; no GPU currently meets the eval-idle rule, so formal policy has not been launched yet.
