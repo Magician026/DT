@@ -56,9 +56,9 @@ def main():
      c=read(completion);assert c['status']==('smoke_pass' if smoke else 'completed');assert c['policy_checkpoint_sha256']==read(pr/'completion.json')['checkpoint_sha256'];return
     if dest.exists():raise RuntimeError('Existing incomplete evaluation: audit before reuse')
     argv=cmd('prepare_eval_v2.py','--external-runtime',home/'UniVTAC details/reproduction_official_20260905/eval_runtime_official','--source',source,'--policy-run',pr,'--out',dest,'--gpu',gpu,'--seeds',seeds,'--launch')
-    if smoke:argv+=['--smoke-steps','3','--allow-smoke']
+    if smoke:argv+=['--smoke-steps','30','--allow-smoke']
     run(dest.name,argv)
-   smoke=out/'eval_smoke';ev(sm,smoke,True);pr=out/'policy_seed0'
+   smoke=out/'eval_smoke_30';ev(sm,smoke,True);pr=out/'policy_seed0'
    if not (pr/'completion.json').exists():run('policy_seed0',pc+['--out',str(pr),'--eval-smoke',str(smoke/'results/completion.json')])
    c=read(pr/'completion.json');assert c['optimizer_updates']==4000 and c['micro_iterations']==8000 and c['encoder_sha256']==e['checkpoint_sha256'];assert read(pr/'resolved_config.json')['seed']==0
    dest=out/'eval_1000000_1000099';ev(pr,dest)
