@@ -22,14 +22,6 @@ Updated: 2026-09-10 (Asia/Singapore)
 - Strict warm-start accounting: 136 compatible Spatial keys, 12 new Dynamic keys
 - Learned dynamic gate after pretraining: `0.14849716424942017`
 
-## Sanity checks
-
-- Encoder physical-batch-32 peak allocated memory: 4,884,893,184 bytes
-- Fixed-real-batch encoder overfit: first-five mean `1.8731478929519654`, last-five mean `0.884002411365509`
-- ACT physical batch 32 × accumulation 2 probe: passed; peak allocated memory 11,825,753,600 bytes
-- ACT interface: `[32, 50, 8]` actions, three optimizer groups at `1e-5`, static and dynamic attention update, BatchNorm frozen
-- Simulator smoke: passed three action steps on seed 1000000; three unique tactile hashes and two detected transitions; one episode reset
-
 ## Current stage
 
 - Formal ACT policy training completed on the immutable source release in 4,174.91 seconds.
@@ -37,5 +29,8 @@ Updated: 2026-09-10 (Asia/Singapore)
 - Policy checkpoint SHA256: `ebff7456160dd312af30cf350edbdafa27da6a93fdb758148f6eecc91547e40a`
 - Strict policy checkpoint reload passed; validation loss decreased from `0.170235889` at step 500 to `0.087586921` at step 4000.
 - Quick triage completed on seeds 1000000–1000019: 5/20 successes (25%), with 20 valid episodes and zero infrastructure errors.
-- Per user direction, the isolated full evaluation on seeds 1000000–1000099 started on GPU 3 at 2026-09-10 19:00 Asia/Singapore; launcher PID `3852152`, Isaac child PID `3856078`.
+- Formal evaluation completed on seeds 1000000–1000099: 29/100 successes (29%), 100 valid episodes, no duplicate or missing seed, and zero infrastructure errors.
+- Full-eval outcomes SHA256: `196775418281c6ff20f4a902fa622ec3ad2d577b472d59f13f040fe01397e34d`
+- Result is +1 absolute point versus UniVTAC B0 (28/100), -2 points versus Spatial V2 (31/100), and below the minimum Dynamic V2 target of 33/100.
+- The next bounded iteration is Variant A: retain the architecture and training recipe, changing only T=4 temporal stride from 1 to 2.
 - Historical Spatial V2 HDMI outcomes use seeds 0–99; they are not treated as paired evidence for the required million-seed set.
