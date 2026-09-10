@@ -159,14 +159,30 @@ class TacArenaDataset(torch.utils.data.Dataset):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    def __init__(self, episode_ids, dataset_dir, camera_names, tactile_names, norm_stats, chunk_size):
+    def __init__(
+        self,
+        episode_ids,
+        dataset_dir,
+        camera_names,
+        tactile_names,
+        norm_stats,
+        chunk_size,
+        sequence_length=1,
+        temporal_stride=1,
+    ):
         super().__init__()
+        if sequence_length <= 0:
+            raise ValueError("sequence_length must be positive")
+        if temporal_stride <= 0:
+            raise ValueError("temporal_stride must be positive")
         self.episode_ids = episode_ids
         self.dataset_dir = dataset_dir
         self.camera_names = camera_names
         self.tactile_names = tactile_names
         self.chunk_size = chunk_size
         self.norm_stats = norm_stats
+        self.sequence_length = sequence_length
+        self.temporal_stride = temporal_stride
         self.create_dataset()
 
     def create_dataset(self):
@@ -207,8 +223,23 @@ class TacArenaDataset(torch.utils.data.Dataset):
         for cam_name in self.camera_names:
             image_dict[cam_name] = root[f"/observations/images/{cam_name}"][start_ts]
         tactile_dict = dict()
-        for tactile_name in self.tactile_names:
-            tactile_dict[tactile_name] = root[f"/observations/images/{tactile_name}"][start_ts]
+        if self.sequence_length == 1:
+            for tactile_name in self.tactile_names:
+                tactile_dict[tactile_name] = root[f"/observations/images/{tactile_name}"][start_ts]
+        else:
+            from encoder.dynamic_data import causal_history_indices
+
+            history_indices = causal_history_indices(
+                start_ts,
+                self.sequence_length,
+                self.temporal_stride,
+            )
+            for tactile_name in self.tactile_names:
+                tactile_frames = root[f"/observations/images/{tactile_name}"]
+                tactile_dict[tactile_name] = [
+                    tactile_frames[history_index]
+                    for history_index in history_indices
+                ]
 
         action = root["/action"][start_ts:end_ts]
         padded_action = np.zeros((self.chunk_size, action.shape[1]), dtype=np.float32)
@@ -227,7 +258,13 @@ class TacArenaDataset(torch.utils.data.Dataset):
         if len(self.tactile_names) > 0:
             all_tac_images = []
             for tac_name in self.tactile_names:
-                all_tac_images.append(self.tac_image_trans(tactile_dict[tac_name]))
+                if self.sequence_length == 1:
+                    all_tac_images.append(self.tac_image_trans(tactile_dict[tac_name]))
+                else:
+                    all_tac_images.append(torch.stack([
+                        self.tac_image_trans(frame)
+                        for frame in tactile_dict[tac_name]
+                    ]))
             all_tac_images = torch.stack(all_tac_images, dim=0)
         else:
             all_tac_images = torch.Tensor([])
@@ -244,7 +281,17 @@ class TacArenaDataset(torch.utils.data.Dataset):
         return all_cam_images, all_tac_images, qpos_data, action_data, is_pad
 
 
-def load_data(dataset_dir, num_episodes, camera_names, tactile_names, batch_size_train, batch_size_val, chunk_size):
+def load_data(
+    dataset_dir,
+    num_episodes,
+    camera_names,
+    tactile_names,
+    batch_size_train,
+    batch_size_val,
+    chunk_size,
+    sequence_length=1,
+    temporal_stride=1,
+):
     print(f"\nData from: {dataset_dir}\n")
     # obtain train test split
     train_ratio = 0.8
@@ -258,8 +305,14 @@ def load_data(dataset_dir, num_episodes, camera_names, tactile_names, batch_size
     # construct dataset and dataloader
     # train_dataset = EpisodicDataset(train_indices, dataset_dir, camera_names, tactile_names, norm_stats, max_action_len)
     # val_dataset = EpisodicDataset(val_indices, dataset_dir, camera_names, tactile_names, norm_stats, max_action_len)
-    train_dataset = TacArenaDataset(train_indices, dataset_dir, camera_names, tactile_names, norm_stats, chunk_size)
-    val_dataset = TacArenaDataset(val_indices, dataset_dir, camera_names, tactile_names, norm_stats, chunk_size)
+    train_dataset = TacArenaDataset(
+        train_indices, dataset_dir, camera_names, tactile_names, norm_stats,
+        chunk_size, sequence_length, temporal_stride,
+    )
+    val_dataset = TacArenaDataset(
+        val_indices, dataset_dir, camera_names, tactile_names, norm_stats,
+        chunk_size, sequence_length, temporal_stride,
+    )
 
     train_dataloader = DataLoader(
         train_dataset,

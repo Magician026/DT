@@ -3,6 +3,7 @@ import os
 import torch
 import numpy as np
 import pickle
+from collections import deque
 from pathlib import Path
 from torch.nn import functional as F
 
@@ -127,6 +128,22 @@ class ACT:
         self.max_timesteps = 3000  # Large enough for deployment
         self.camera_names = args_override.get("camera_names", ["cam_high"])  # TacArena: read from args
         self.tactile_names = args_override.get("tactile_names", ["tac_left", "tac_right"])  # TacArena: read from args
+        self.tactile_sequence_length = int(
+            args_override.get("tactile_sequence_length", 1)
+        )
+        self.tactile_temporal_stride = int(
+            args_override.get("tactile_temporal_stride", 1)
+        )
+        if self.tactile_sequence_length <= 0:
+            raise ValueError("tactile_sequence_length must be positive")
+        if self.tactile_temporal_stride <= 0:
+            raise ValueError("tactile_temporal_stride must be positive")
+        history_length = (
+            (self.tactile_sequence_length - 1) * self.tactile_temporal_stride + 1
+        )
+        self.tactile_history = {
+            name: deque(maxlen=history_length) for name in self.tactile_names
+        }
 
         # Set query frequency based on temporal_agg - matching imitate_episodes.py logic
         self.query_frequency = self.num_queries
@@ -200,7 +217,19 @@ class ACT:
         if len(self.tactile_names) > 0:
             tac_image = []
             for tac_name in self.tactile_names:
-                tac_image.append(obs[tac_name])
+                current = obs[tac_name].detach().clone()
+                history = self.tactile_history[tac_name]
+                history.append(current)
+                if self.tactile_sequence_length == 1:
+                    tac_image.append(current)
+                    continue
+                selected = []
+                for position in range(self.tactile_sequence_length):
+                    offset = (
+                        self.tactile_sequence_length - 1 - position
+                    ) * self.tactile_temporal_stride
+                    selected.append(history[max(0, len(history) - 1 - offset)])
+                tac_image.append(torch.stack(selected, dim=0))
             tac_image = torch.stack(tac_image, dim=0).to(self.device).unsqueeze(0)
         else:
             tac_image = torch.tensor([]).to(self.device)
@@ -238,6 +267,8 @@ class ACT:
     def reset(self):
         """Reset temporal aggregation state and timestep counter"""
         self.t = 0
+        for history in self.tactile_history.values():
+            history.clear()
         if self.temporal_agg:
             self.all_time_actions = torch.zeros([
                 self.max_timesteps,

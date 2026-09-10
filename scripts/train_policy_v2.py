@@ -22,6 +22,21 @@ def resolve_policy_config(config_path,tactile_ckpt,out):
  cfg.setdefault('seed',42)
  cfg.update(tactile_ckpt=str(tactile_ckpt),ckpt_dir=str(out),num_epochs=6000,device='cuda:0')
  return cfg
+def validate_training_contract(cfg, *, smoke, smoke_batch, optimizer_group_lrs=None):
+ encoder_type=cfg.get('tactile_encoder_type','detail_v2')
+ if encoder_type not in ('detail_v2','detail_v2_dynamic'):raise ValueError(f'Unsupported tactile encoder type: {encoder_type!r}')
+ if cfg.get('tactile_type')!='feat':raise ValueError('Canonical V2 tactile encoders require tactile_type=feat')
+ if encoder_type=='detail_v2_dynamic' and (cfg.get('tactile_sequence_length')!=4 or cfg.get('tactile_temporal_stride')!=1):raise ValueError('Dynamic V2 requires tactile temporal metadata length=4 stride=1')
+ if optimizer_group_lrs is not None:
+  if len(optimizer_group_lrs)!=3:raise ValueError('Protocol requires exactly three optimizer groups')
+  if any(value!=1e-5 for value in optimizer_group_lrs):raise ValueError('Protocol requires every optimizer group LR=1e-5')
+ if not smoke:
+  if cfg.get('num_steps')!=4000:raise ValueError('Formal protocol requires exactly 4000 optimizer updates')
+  for key in ('lr','lr_vision_backbone','lr_tactile_backbone'):
+   if cfg.get(key)!=1e-5:raise ValueError(f'Formal protocol requires {key}=1e-5')
+  return {'optimizer_updates':4000,'physical_batch':32,'gradient_accumulation':2,'effective_batch':64}
+ physical_batch=smoke_batch;accumulation=1 if smoke_batch==2 else 2
+ return {'optimizer_updates':2,'physical_batch':physical_batch,'gradient_accumulation':accumulation,'effective_batch':physical_batch*accumulation}
 def main():
  p=argparse.ArgumentParser();p.add_argument('--config',required=True);p.add_argument('--data',required=True);p.add_argument('--encoder-run',required=True);p.add_argument('--out',required=True);p.add_argument('--source-commit',required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--smoke-batch',type=int,default=2);p.add_argument('--eval-smoke');p.add_argument('--resume',action='store_true');a=p.parse_args()
  if not a.smoke and (ROOT/'SOURCE_COMMIT').read_text().strip()!=a.source_commit:raise RuntimeError('Immutable release/source commit mismatch')
@@ -34,11 +49,12 @@ def main():
   assert not completion.get('smoke',False) and not completion.get('probe',False)
   ev=json.loads(Path(a.eval_smoke).read_text());assert ev['status']=='smoke_pass','Need a validated simulator smoke path'
  ckpt=er/completion['checkpoint'];assert sha(ckpt)==completion['checkpoint_sha256']
- enc,_=load_encoder_checkpoint(ckpt,expected_encoder_type='detail_v2',expected_preprocess=PREPROCESS)
  cfg=resolve_policy_config(a.config,ckpt,out)
- if not a.smoke and cfg['num_steps']!=4000:raise ValueError('Formal protocol requires exactly 4000 optimizer updates')
+ encoder_type=cfg.get('tactile_encoder_type','detail_v2')
+ enc,_=load_encoder_checkpoint(ckpt,expected_encoder_type=encoder_type,expected_preprocess=PREPROCESS)
+ schedule=validate_training_contract(cfg,smoke=a.smoke,smoke_batch=a.smoke_batch)
  cfg.update(training_control='optimizer_updates',resume_data_order='restore independent sampler epoch generator state and batch cursor')
- cfg.update(run_id=out.name,source_commit=a.source_commit,encoder_sha256=sha(ckpt),smoke=a.smoke,physical_batch=a.smoke_batch if a.smoke else 32,gradient_accumulation=1 if a.smoke and a.smoke_batch==2 else 2)
+ cfg.update(run_id=out.name,source_commit=a.source_commit,encoder_sha256=sha(ckpt),smoke=a.smoke,physical_batch=schedule['physical_batch'],gradient_accumulation=schedule['gradient_accumulation'])
  contract_hash=manifest_hash(cfg)
  if a.resume:
   previous=json.loads((out/'resolved_config.json').read_text());assert manifest_hash(previous)==contract_hash,'Resume contract mismatch'
@@ -48,7 +64,7 @@ def main():
  indices=np.random.RandomState(1).permutation(episode_count);split={'seed':1,'train':indices[:40].tolist(),'val':indices[40:].tolist(),'normalization':'all50 per existing ACT protocol; validation not strict statistical holdout'};atomic(out/'policy_split.json',split)
  stats,_=get_norm_stats(a.data,episode_count)
  with (out/'dataset_stats.pkl').open('wb') as f:pickle.dump(stats,f)
- datasets={s:TacArenaDataset(np.array(split[s]),a.data,cfg['camera_names'],cfg['tactile_names'],stats,cfg['chunk_size']) for s in ('train','val')}
+ datasets={s:TacArenaDataset(np.array(split[s]),a.data,cfg['camera_names'],cfg['tactile_names'],stats,cfg['chunk_size'],cfg.get('tactile_sequence_length',1),cfg.get('tactile_temporal_stride',1)) for s in ('train','val')}
  batch=a.smoke_batch if a.smoke else 32
  train_generator=torch.Generator().manual_seed(cfg['seed'])
  loaders={s:DataLoader(ds,generator=train_generator if s=='train' else None,batch_size=batch,shuffle=s=='train',num_workers=0 if a.smoke else 4,pin_memory=True,drop_last=s=='train') for s,ds in datasets.items()}
@@ -56,6 +72,7 @@ def main():
  managed={id(p) for g in optimizer.param_groups for p in g['params']}
  assert all(id(p) in managed for p in tactile.parameters() if p.requires_grad)
  group_report=[{'lr':g['lr'],'parameters':sum(p.numel() for p in g['params'])} for g in optimizer.param_groups]
+ validate_training_contract(cfg,smoke=a.smoke,smoke_batch=a.smoke_batch,optimizer_group_lrs=[g['lr'] for g in optimizer.param_groups])
  cam,tac,q,act,pad=next(iter(loaders['train']));cam,tac,q,act,pad=[v.cuda() for v in (cam,tac,q,act,pad)]
  policy.eval();enc=enc.cuda().eval()
  with torch.no_grad():
@@ -67,8 +84,11 @@ def main():
  params_before={n:p.detach().clone() for n,p in tactile.named_parameters() if p.requires_grad}
  loss=policy(q,cam,tac,act,pad)['loss'];optimizer.zero_grad();loss.backward()
  grad={n:float(p.grad.norm()) for n,p in tactile.named_parameters() if p.requires_grad and p.grad is not None};assert grad and all(np.isfinite(list(grad.values())))
+ assert max(v for n,v in grad.items() if 'cross_attention' in n)>0
+ if encoder_type=='detail_v2_dynamic':assert max(v for n,v in grad.items() if 'dynamic_attention' in n)>0
  optimizer.step();updates={n:float((p-params_before[n]).abs().max()) for n,p in tactile.named_parameters() if p.requires_grad}
  assert max(v for n,v in updates.items() if 'cross_attention' in n)>0
+ if encoder_type=='detail_v2_dynamic':assert max(v for n,v in updates.items() if 'dynamic_attention' in n)>0
  for n,b in tactile.named_buffers():
   if n in bn_before:assert torch.equal(b,bn_before[n]),f'BN drift {n}'
  atomic(out/'interface_smoke.json',{'status':'passed','actions_shape':list(actions.shape),'tactile_perturbation_max_abs':delta,'encoder_sha256':sha(ckpt),'critical_weight_coverage':1.0,'optimizer_groups':group_report,'tactile_gradients':grad,'tactile_parameter_updates':updates,'bn_statistics':'frozen','bn_affine':'frozen'})
@@ -77,7 +97,7 @@ def main():
  policy=ACTPolicy(cfg).cuda();optimizer=policy.configure_optimizers();step=0
  if a.resume:
   state=torch.load(out/'training_state.pt',weights_only=False);assert state['encoder_sha256']==sha(ckpt);assert state['contract_hash']==contract_hash;policy.load_state_dict(state['policy'],strict=True);optimizer.load_state_dict(state['optimizer']);step=state['step'];torch.set_rng_state(state['rng']);torch.cuda.set_rng_state_all(state['cuda_rng']);np.random.set_state(state['numpy_rng']);random.setstate(state['python_rng'])
- target=2 if a.smoke else cfg['num_steps'];accum=1 if a.smoke and a.smoke_batch==2 else 2
+ target=schedule['optimizer_updates'];accum=schedule['gradient_accumulation']
  train_generator.manual_seed(cfg['seed']);sampler_offset=0
  if a.resume:train_generator.set_state(state['sampler_epoch_state']);sampler_offset=state['sampler_offset']
  sampler_epoch_state=train_generator.get_state();iterator=iter(loaders['train'])
@@ -105,6 +125,6 @@ def main():
    save(out/'policy_last.ckpt',policy.state_dict());save(out/'training_state.pt',{'policy':policy.state_dict(),'optimizer':optimizer.state_dict(),'step':step,'encoder_sha256':sha(ckpt),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'numpy_rng':np.random.get_state(),'python_rng':random.getstate(),'contract_hash':contract_hash,'sampler_epoch_state':sampler_epoch_state,'sampler_offset':sampler_offset})
  assert step==target and micro==target*accum
  loaded=torch.load(out/'policy_last.ckpt',weights_only=True);policy.load_state_dict(loaded,strict=True)
- atomic(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':a.source_commit,'smoke':a.smoke,'optimizer_updates':step,'micro_iterations':micro,'encoder_sha256':sha(ckpt),'checkpoint':'policy_last.ckpt','checkpoint_sha256':sha(out/'policy_last.ckpt'),'dataset_stats_sha256':sha(out/'dataset_stats.pkl'),'policy_split_hash':manifest_hash(split),'elapsed':time.time()-t0})
+ atomic(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':a.source_commit,'smoke':a.smoke,'optimizer_updates':step,'micro_iterations':micro,'encoder_sha256':sha(ckpt),'tactile_encoder_type':encoder_type,'tactile_sequence_length':cfg.get('tactile_sequence_length',1),'tactile_temporal_stride':cfg.get('tactile_temporal_stride',1),'checkpoint':'policy_last.ckpt','checkpoint_sha256':sha(out/'policy_last.ckpt'),'dataset_stats_sha256':sha(out/'dataset_stats.pkl'),'policy_split_hash':manifest_hash(split),'elapsed':time.time()-t0})
  print('completed',out,flush=True)
 if __name__=='__main__':main()

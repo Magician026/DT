@@ -31,7 +31,12 @@ if str(repository_root) not in sys.path:
     sys.path.insert(0, str(repository_root))
 
 from encoder.clean_v2 import PREPROCESS
-from encoder.detail_v2 import DetailV2Encoder, OriginalEncoder, load_encoder_checkpoint
+from encoder.detail_v2 import (
+    DetailV2Encoder,
+    DynamicDetailV2Encoder,
+    OriginalEncoder,
+    load_encoder_checkpoint,
+)
 
 import IPython
 
@@ -170,19 +175,29 @@ class TactileBackbone(nn.Module):
         self.tac_names = tac_names
         self.num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
 
-        if tactile_encoder_type == 'detail_v2':
+        if tactile_encoder_type in ('detail_v2', 'detail_v2_dynamic'):
             if name != 'resnet18':
-                raise ValueError("detail_v2 requires tactile_backbone='resnet18'")
+                raise ValueError(
+                    f"{tactile_encoder_type} requires tactile_backbone='resnet18'"
+                )
             if tactile_type != 'feat':
-                raise ValueError("detail_v2 only supports tactile_type='feat'")
+                raise ValueError(
+                    f"{tactile_encoder_type} only supports tactile_type='feat'"
+                )
             encoder, metadata = load_encoder_checkpoint(
                 checkpoint_path,
-                expected_encoder_type='detail_v2',
+                expected_encoder_type=tactile_encoder_type,
                 expected_preprocess=PREPROCESS,
             )
-            if not isinstance(encoder, DetailV2Encoder):
+            expected_class = (
+                DetailV2Encoder
+                if tactile_encoder_type == 'detail_v2'
+                else DynamicDetailV2Encoder
+            )
+            if type(encoder) is not expected_class:
                 raise TypeError(
-                    "detail_v2 checkpoint loader returned a non-canonical encoder"
+                    f"{tactile_encoder_type} checkpoint loader returned a "
+                    "non-canonical encoder"
                 )
             self.backbone = encoder
             self.position_embedding = nn.Embedding(1, self.num_channels)

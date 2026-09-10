@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import torch
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -80,8 +81,11 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
     config = yaml.safe_load((policy_run / "train_config.yml").read_text())
     if not isinstance(config, Mapping):
         raise ValueError("train_config.yml must contain a mapping")
-    if config.get("tactile_encoder_type") != "detail_v2":
-        raise ValueError("train_config must use tactile_encoder_type=detail_v2")
+    encoder_type = config.get("tactile_encoder_type")
+    if encoder_type not in ("detail_v2", "detail_v2_dynamic"):
+        raise ValueError(
+            "train_config must use tactile_encoder_type=detail_v2 or detail_v2_dynamic"
+        )
     if config.get("tactile_type") != "feat":
         raise ValueError("train_config must use tactile_type=feat")
     tactile_checkpoint = Path(str(config.get("tactile_ckpt", "")))
@@ -89,6 +93,36 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
         raise ValueError("train_config tactile_ckpt must be an existing absolute path")
     if _sha256(tactile_checkpoint) != completion.get("encoder_sha256"):
         raise ValueError("encoder SHA256 does not match policy completion")
+    if encoder_type == "detail_v2_dynamic":
+        temporal_metadata = {
+            "tactile_sequence_length": config.get("tactile_sequence_length"),
+            "tactile_temporal_stride": config.get("tactile_temporal_stride"),
+        }
+        if temporal_metadata != {
+            "tactile_sequence_length": 4,
+            "tactile_temporal_stride": 1,
+        }:
+            raise ValueError("dynamic tactile temporal metadata must be length=4 stride=1")
+        if any(completion.get(key) != value for key, value in temporal_metadata.items()):
+            raise ValueError("dynamic tactile temporal metadata differs from completion")
+        if completion.get("tactile_encoder_type") != encoder_type:
+            raise ValueError("dynamic tactile encoder type differs from completion")
+        checkpoint_metadata = torch.load(
+            tactile_checkpoint, map_location="cpu", weights_only=True
+        )
+        checkpoint_structure = (
+            checkpoint_metadata.get("structure", {})
+            if isinstance(checkpoint_metadata, Mapping)
+            else {}
+        )
+        if (
+            checkpoint_metadata.get("encoder_type") != encoder_type
+            or checkpoint_structure.get("sequence_length")
+            != temporal_metadata["tactile_sequence_length"]
+            or checkpoint_structure.get("temporal_stride")
+            != temporal_metadata["tactile_temporal_stride"]
+        ):
+            raise ValueError("dynamic tactile temporal metadata differs from encoder checkpoint")
 
     optimizer_updates = completion.get("optimizer_updates")
     if isinstance(optimizer_updates, bool) or not isinstance(optimizer_updates, int):
@@ -331,6 +365,9 @@ def prepare_runtime(
             "checkpoint_sha256": completion["checkpoint_sha256"],
             "dataset_stats_sha256": completion["dataset_stats_sha256"],
             "encoder_sha256": completion["encoder_sha256"],
+            "tactile_encoder_type": config["tactile_encoder_type"],
+            "tactile_sequence_length": config.get("tactile_sequence_length", 1),
+            "tactile_temporal_stride": config.get("tactile_temporal_stride", 1),
             "optimizer_updates": completion["optimizer_updates"],
             "train_config_sha256": train_config_sha256,
             "source_tree_sha256": source_tree_sha256,
@@ -340,6 +377,9 @@ def prepare_runtime(
             "policy_checkpoint_sha256": completion["checkpoint_sha256"],
             "dataset_stats_sha256": completion["dataset_stats_sha256"],
             "encoder_sha256": completion["encoder_sha256"],
+            "tactile_encoder_type": config["tactile_encoder_type"],
+            "tactile_sequence_length": config.get("tactile_sequence_length", 1),
+            "tactile_temporal_stride": config.get("tactile_temporal_stride", 1),
             "policy_source_commit": completion["source_commit"],
             "train_config_sha256": train_config_sha256,
             "seed_manifest_sha256": _sha256(seeds_path),

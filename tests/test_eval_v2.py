@@ -150,7 +150,7 @@ def _write_eval_script(path: Path):
     )
 
 
-def _runtime_fixture(tmp_path: Path):
+def _runtime_fixture(tmp_path: Path, *, encoder_type="detail_v2"):
     external = tmp_path / "official"
     (external / "scripts").mkdir(parents=True)
     (external / "envs").mkdir()
@@ -175,15 +175,23 @@ def _runtime_fixture(tmp_path: Path):
     tactile_checkpoint = tmp_path / "encoder.pt"
     checkpoint.write_bytes(b"policy")
     stats.write_bytes(b"stats")
-    tactile_checkpoint.write_bytes(b"encoder")
+    if encoder_type == "detail_v2_dynamic":
+        torch.save(
+            {
+                "encoder_type": "detail_v2_dynamic",
+                "structure": {"sequence_length": 4, "temporal_stride": 1},
+            },
+            tactile_checkpoint,
+        )
+    else:
+        tactile_checkpoint.write_bytes(b"encoder")
     config = {
         "task_name": "sim-insert_HDMI-demo-50",
         "tactile_type": "feat",
-        "tactile_encoder_type": "detail_v2",
+        "tactile_encoder_type": encoder_type,
         "tactile_ckpt": str(tactile_checkpoint.resolve()),
         "num_steps": 4000,
     }
-    (policy_run / "train_config.yml").write_text(yaml.safe_dump(config))
     completion = {
         "status": "completed",
         "smoke": False,
@@ -193,11 +201,48 @@ def _runtime_fixture(tmp_path: Path):
         "source_commit": "abc123",
         "encoder_sha256": _sha(tactile_checkpoint),
         "optimizer_updates": 4000,
+        "tactile_encoder_type": encoder_type,
     }
+    if encoder_type == "detail_v2_dynamic":
+        config.update(tactile_sequence_length=4, tactile_temporal_stride=1)
+        completion.update(tactile_sequence_length=4, tactile_temporal_stride=1)
+    (policy_run / "train_config.yml").write_text(yaml.safe_dump(config))
     (policy_run / "completion.json").write_text(json.dumps(completion))
     seeds = tmp_path / "seeds.json"
     seeds.write_text(json.dumps([0, 7, 11]))
     return external, source, policy_run, seeds
+
+
+def test_prepare_accepts_dynamic_encoder_and_rejects_temporal_metadata_drift(tmp_path):
+    external, source, policy_run, seeds = _runtime_fixture(
+        tmp_path, encoder_type="detail_v2_dynamic"
+    )
+
+    prepared = prepare_runtime(
+        external_runtime=external,
+        source=source,
+        policy_run=policy_run,
+        out=tmp_path / "dynamic_eval",
+        gpu="1",
+        seeds_path=seeds,
+    )
+    assert prepared["tactile_encoder_type"] == "detail_v2_dynamic"
+    assert prepared["tactile_sequence_length"] == 4
+    assert prepared["tactile_temporal_stride"] == 1
+
+    config_path = policy_run / "train_config.yml"
+    config = yaml.safe_load(config_path.read_text())
+    config["tactile_temporal_stride"] = 2
+    config_path.write_text(yaml.safe_dump(config))
+    with pytest.raises(ValueError, match="temporal metadata"):
+        prepare_runtime(
+            external_runtime=external,
+            source=source,
+            policy_run=policy_run,
+            out=tmp_path / "bad_dynamic_eval",
+            gpu="1",
+            seeds_path=seeds,
+        )
 
 
 def test_prepare_creates_isolated_official_runtime_with_only_requested_overlays(tmp_path):
