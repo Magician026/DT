@@ -32,7 +32,9 @@ Updated: 2026-09-10 (Asia/Singapore)
 
 ## Current stage
 
-- Formal ACT policy training is running on the immutable source release.
-- Required completion contract: 4000 optimizer updates, 8000 micro-iterations, physical batch 32 × accumulation 2.
-- Next evaluation: quick triage on seeds 1000000–1000019, followed by 1000000–1000099 only if the quick result is materially positive.
+- Formal ACT policy training completed on the immutable source release in 4,174.91 seconds.
+- Completion contract verified: 4000 optimizer updates, 8000 micro-iterations, physical batch 32 × accumulation 2, and three optimizer groups at `1e-5`.
+- Policy checkpoint SHA256: `ebff7456160dd312af30cf350edbdafa27da6a93fdb758148f6eecc91547e40a`
+- Strict policy checkpoint reload passed; validation loss decreased from `0.170235889` at step 500 to `0.087586921` at step 4000.
+- Quick triage on seeds 1000000–1000019 is running on GPU 3; full seeds 1000000–1000099 remain gated on a materially positive quick result.
 - Historical Spatial V2 HDMI outcomes use seeds 0–99; they are not treated as paired evidence for the required million-seed set.
