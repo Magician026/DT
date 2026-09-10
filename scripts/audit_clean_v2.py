@@ -4,6 +4,15 @@ from pathlib import Path
 import h5py,numpy as np
 from encoder.clean_v2 import make_manifest,manifest_hash,decode,PREPROCESS
 
+def validate_marker_pairs(m):
+ # gen_marker_flow applies visibility/tracking/selection to both planes together.
+ # Slot identity across frames is not invariant. Targets remain frame-local pairs.
+ if m.ndim!=4 or m.shape[1:]!=(2,1200,2) or len(m)==0:raise ValueError('Invalid marker pair shape')
+ if not np.isfinite(m).all():raise ValueError('Nonfinite marker pair')
+ return {'reference_changes_across_frames':not bool(np.allclose(m[:,0],m[0,0],atol=1e-5)),
+         'maximum_reference_slot_change':float(np.max(np.abs(m[:,0]-m[0,0]))),
+         'semantics':'frame-local initial/current pairs; visibility filtering and repeat-last padding shared across planes'}
+
 def main():
  p=argparse.ArgumentParser();p.add_argument('--clean',required=True);p.add_argument('--act',required=True);p.add_argument('--out',required=True);p.add_argument('--depth-only',action='store_true');a=p.parse_args()
  root=Path(a.clean);out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
@@ -17,10 +26,10 @@ def main():
     if (m is not None and not np.isfinite(m).all()) or not np.isfinite(d).all():raise ValueError(name)
     if m is not None:assert m.shape[1:]==(2,1200,2)
     assert d.shape[1:]==(240,320)
-    if m is not None:assert np.allclose(m[:,0],m[0,0],atol=1e-5),f'nonstationary marker reference {name}'
+    marker_audit=None if m is None else validate_marker_pairs(m)
     image=decode(s['rgb_marker'][0]);assert image.shape==(240,320,3)
     delta=None if m is None else m[:,1]-m[:,0]
-    row['sensors'][side]={'frames':n,'depth_range':[float(d.min()),float(d.max())],'marker_displacement_range':None if delta is None else [float(delta.min()),float(delta.max())],'image_shape':list(image.shape)}
+    row['sensors'][side]={'frames':n,'marker_pair_audit':marker_audit,'depth_range':[float(d.min()),float(d.max())],'marker_displacement_range':None if delta is None else [float(delta.min()),float(delta.max())],'image_shape':list(image.shape)}
     if name in manifest['train']:
      for key,v in ([('depth',d)] if a.depth_only else [('depth',d),('marker',delta)]):
       v=v.astype(np.float64);sums[key][0]+=v.size;sums[key][1]+=v.sum();sums[key][2]+=(v*v).sum()

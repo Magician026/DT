@@ -1,5 +1,5 @@
 """Serial task runner; reuses live encoder and never overwrites an eval attempt."""
-import argparse,fcntl,json,os,subprocess,sys,time
+import argparse,fcntl,json,os,subprocess,sys,time,shutil
 from pathlib import Path
 from datetime import datetime,timezone
 from scripts.run_v2_chain import check_encoder
@@ -7,7 +7,7 @@ from scripts.summarize_v2_eval import write_outputs
 
 def read(p):return json.loads(Path(p).read_text())
 def main():
- p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--source',required=True);p.add_argument('--encoder-pid',type=int,required=True);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--source',required=True);p.add_argument('--encoder-pid',type=int,default=0);p.add_argument('--tasks',nargs='+',choices=['insert_tube','pull_out_key'],default=['insert_tube','pull_out_key']);p.add_argument('--audit-dir');p.add_argument('--audit-pid',type=int);a=p.parse_args()
  base=Path(a.base);source=Path(a.source);home=Path.home();commit=(source/'SOURCE_COMMIT').read_text().strip();gpu='2'
  lock=open(base/'controller.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
  state={'pid':os.getpid(),'source_commit':commit,'gpu':gpu}
@@ -29,10 +29,16 @@ def main():
    if rc:raise RuntimeError(f'{stage} exited {rc}; retained log {log}')
  def cmd(script,*args):return [sys.executable,str(source/'scripts'/script),*map(str,args)]
  try:
-  for task in ('insert_tube','pull_out_key'):
-   status(task=task,stage='audit',status='checking');out=base/'runs'/task;out.mkdir(parents=True,exist_ok=True);audit=base/'audits'/('pull_out_key_depth_only' if task=='pull_out_key' else task)
+  for task in a.tasks:
+   status(task=task,stage='audit',status='checking');out=base/'runs'/task;out.mkdir(parents=True,exist_ok=True);audit=Path(a.audit_dir) if a.audit_dir else base/'audits'/('pull_out_key_depth_only' if task=='pull_out_key' else task)
+   while a.audit_pid and not (audit/'data_audit.json').exists():
+    proc=Path(f'/proc/{a.audit_pid}/cmdline')
+    if not proc.exists() or b'audit_clean_v2' not in proc.read_bytes():raise RuntimeError('Data audit exited without completion')
+    status(stage='audit',status='waiting_existing');time.sleep(30)
    if not (audit/'data_audit.json').exists():raise RuntimeError(f'{task} data audit not complete: marker semantics diagnosis required; do not train')
-   enc=out/'encoder';cfg=source/'configs'/f'encoder_{task}_v2.json';policy_cfg=source/'configs'/f'policy_{task}_v2_seed0.yml'
+   enc=out/'encoder';cfg=source/'configs'/f'encoder_{task}_v2.json';
+   if a.audit_dir:assert read(audit/'data_audit.json')['active_heads']==read(cfg)['active_heads'],'Audit/config targets mismatch'
+   policy_cfg=source/'configs'/f'policy_{task}_v2_seed0.yml'
    ec=cmd('train_encoder_v2.py','--config',cfg,'--clean',home/f'UniVTAC details/data/{task}/clean','--data-audit',audit/'data_audit.json','--split',audit/'split.json','--source-commit',commit)
    if task=='insert_tube' and not (enc/'completion.json').exists():
     status(stage='encoder',status='waiting_existing',child_pid=a.encoder_pid,log=str(out/'encoder.log'))
@@ -63,6 +69,11 @@ def main():
    c=read(pr/'completion.json');assert c['optimizer_updates']==4000 and c['micro_iterations']==8000 and c['encoder_sha256']==e['checkpoint_sha256'];assert read(pr/'resolved_config.json')['seed']==0
    dest=out/'eval_1000000_1000099';ev(pr,dest)
    s=write_outputs([dest],range(1000000,1000100),base/'results',f'{task}_v2_policy_seed0');status(stage='task_completed',status='completed',success=s['success_count'])
+   # All formal artifacts are verified; smoke paths are no longer consumed.
+   for label in ('encoder_smoke','policy_smoke','eval_smoke_30'):
+    directory=out/label
+    if directory.exists() and not directory.is_symlink():shutil.rmtree(directory)
+    (out/(label+'.log')).unlink(missing_ok=True)
   status(stage='all_completed',status='completed')
  except Exception as e:status(status='failed',error=str(e));raise
 if __name__=='__main__':main()
