@@ -24,3 +24,7 @@ Verified 2026-09-10 06:41 UTC: formal depth+marker encoder completed 5 epochs / 
 Policy smoke and 30-action simulation smoke passed (30 distinct tactile observations). Formal policy seed 0 is running on GPU 2, PID 2632718, observed 2700/4000 updates; no formal evaluation result yet. Controller PID 1747332 will launch 100 rollouts after verified policy completion.
 
 Server root: `/usr1/home/s126mdg41_04/UniVTAC details v2/key_depth_marker_seed0`; policy log: `runs/pull_out_key/policy_seed0.log`.
+
+## Corrected run: policy completed
+
+Verified 2026-09-10 07:12 UTC: policy seed0 completed 4000 optimizer updates / 8000 micro iterations. Policy SHA256 `c25eddbb1f88e8ff3eae02d09be40457d0263366558ab87795c6fbebe64cd8dc`; encoder hash unchanged. Formal evaluation started 06:53 UTC, launcher PID551341, GPU2, exact seeds1000000–1000099. Evaluation is in progress; final success rate pending. Evidence: `key_depth_marker_policy_completion.json`.
