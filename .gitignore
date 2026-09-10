@@ -68,3 +68,4 @@ runs/
 .env
 *.pkl
 .pytest_cache/
+.worktrees/
