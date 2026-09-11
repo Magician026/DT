@@ -19,7 +19,7 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Local full `tests/` suite:112 passed before pipeline helper; pipeline threshold checks8 passed. Targeted encoder43, ACT/eval21 and training24 are overlapping subsets, not additional independent trials.
 - Warm-start:136 inherited state keys match exactly;11 new keys. On four real training examples (episode27, both sensors, anchors0 and3), inherited current representation max error0; gate≈0 final512D cosine0.952906–0.962852, relativeL2 0.312386–0.363021. The specified extra final LayerNorm changes scale even at zero residual; no calibration or architecture change was introduced. Initial gate0.1 cosine0.952880–0.962827. Strict reload exact.
 - Policy GPU smoke completed2 optimizer updates /4 micro-iterations at32×2. Smoke-only freeze1 exercises both warmup and actual unfreeze; formal remains400. Nonzero GRU/alpha gradients, alpha update, zero inherited-weight change during warmup, frozenBN, forward/backward and strict reload passed. Policy split/statistics match Spatial exactly.
-- Simulator smoke launched on verified completely idle GPU2; result pending.
+- Simulator smoke passed:3 actions,3 tactile observations,2 changes,3 unique hashes,1 reset; exact TRA source/encoder/stats/T4/stride1 provenance. Formal pipeline subsequently launched on GPU2 with24230MiB free (launcher PID3057038; remote logs/pipeline.pid records it).
 
 ## Execution and triage
 
@@ -34,3 +34,7 @@ Updated: 2026-09-11 (Asia/Singapore)
 ## Delegation provenance
 
 Real tool roles were used: one `luna_executor` read-only anchor audit and two `spark_coder` workers (encoder and training). Tool-advertised fixed configurations are luna=gpt-5.6-luna/high and spark=gpt-5.6-sol/high, differing from AGENTS.md requested model/effort descriptors. Actual backend model/effort fields were not returned and are unverified; no model switch was simulated.
+
+## Formal launch update
+
+Formal pipeline PID3057038 and training child3057201 run on GPU2. Verified step25/4000,50 micro-iterations, loss6.349237, warmup stage, gate0.09999261, nonzero GRU/alpha gradients. Smoke runtime/checkpoints/logs/config/seed and formal interface_smoke.json were deleted only after real progress; exact cleanup paths are archived in canonical operations. Formal training, initialization, seed manifests and tests remain.

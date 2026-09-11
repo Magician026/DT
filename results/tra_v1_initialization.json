@@ -1,0 +1,11 @@
+{
+  "status": "completed",
+  "stage": "spatial_warm_start_only",
+  "smoke": false,
+  "checkpoint": "init.pt",
+  "checkpoint_sha256": "bbfbd856e2e0a473cd309189ebb4af3e7d59bb7a04c17aa4a0a937204980a99c",
+  "source_commit": "b465aea",
+  "anchor_sha256": "914d9d8315a8ccd7fd88ea853b20375a90010ac45968e88e9d2eb386abffe448",
+  "encoder_type": "detail_v2_tra",
+  "optimizer_updates": 0
+}
