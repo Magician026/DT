@@ -137,7 +137,9 @@ def main():
   if encoder_type=='detail_v2_dynamic':assert max(v for n,v in updates.items() if 'dynamic_attention' in n)>0
  for n,b in tactile.named_buffers():
   if n in bn_before:assert torch.equal(b,bn_before[n]),f'BN drift {n}'
- atomic(out/'interface_smoke.json',{'status':'passed','actions_shape':list(actions.shape),'tactile_perturbation_max_abs':delta,'encoder_sha256':sha(ckpt),'critical_weight_coverage':1.0,'optimizer_groups':group_report,'training_stage':interface_stage,'tactile_gradients':grad,'temporal_gradient_summary':tra_gradient_report(tactile) if encoder_type==TRA_ENCODER_TYPE else None,'tactile_parameter_updates':updates,'bn_statistics':'frozen','bn_affine':'frozen'})
+ interface_report={'status':'passed','actions_shape':list(actions.shape),'tactile_perturbation_max_abs':delta,'encoder_sha256':sha(ckpt),'critical_weight_coverage':1.0,'optimizer_groups':group_report,'tactile_gradients':grad,'tactile_parameter_updates':updates,'bn_statistics':'frozen','bn_affine':'frozen'}
+ if encoder_type==TRA_ENCODER_TYPE:interface_report.update(training_stage=interface_stage,temporal_gradient_summary=tra_gradient_report(tactile))
+ atomic(out/'interface_smoke.json',interface_report)
  # The interface step must never become an extra formal optimization step.
  torch.manual_seed(cfg['seed']);np.random.seed(cfg['seed']);random.seed(cfg['seed']);del policy,optimizer,tactile
  policy=ACTPolicy(cfg).cuda();optimizer=policy.configure_optimizers();step=0
@@ -167,7 +169,10 @@ def main():
    parts=policy(q,cam,tac,act,pad);loss=parts['loss'];assert torch.isfinite(loss);(loss/accum).backward();train_loss+=float(loss)/accum;micro+=1
   gradient_summary=tra_gradient_report(tactile) if encoder_type==TRA_ENCODER_TYPE else None
   optimizer.step();step+=1
-  if step%25==0 or step==1:print(json.dumps({'step':step,'micro_iterations':micro,'loss':train_loss,'elapsed':time.time()-t0,'peak_memory':torch.cuda.max_memory_allocated(),'learning_rates':[g['lr'] for g in optimizer.param_groups],'physical_batch':batch,'effective_batch':batch*accum,'training_stage':training_stage,'alpha':alpha_snapshot(tactile) if encoder_type==TRA_ENCODER_TYPE else None,'temporal_gradients':gradient_summary}),flush=True)
+  if step%25==0 or step==1:
+   progress={'step':step,'micro_iterations':micro,'loss':train_loss,'elapsed':time.time()-t0,'peak_memory':torch.cuda.max_memory_allocated(),'learning_rates':[g['lr'] for g in optimizer.param_groups],'physical_batch':batch,'effective_batch':batch*accum}
+   if encoder_type==TRA_ENCODER_TYPE:progress.update(training_stage=training_stage,alpha=alpha_snapshot(tactile),temporal_gradients=gradient_summary)
+   print(json.dumps(progress),flush=True)
   if step%500==0 or step==target:
    policy.eval();vals=[]
    with torch.no_grad():
@@ -175,10 +180,16 @@ def main():
      val=policy(q.cuda(),cam.cuda(),tac.cuda(),act.cuda(),pad.cuda())['loss'];vals.append(float(val))
      if a.smoke:break
    assert np.isfinite(vals).all()
-   with (out/'metrics.jsonl').open('a') as f:f.write(json.dumps({'step':step,'train_loss':train_loss,'val_loss':float(np.mean(vals)),'training_stage':training_stage,'alpha':alpha_snapshot(tactile) if encoder_type==TRA_ENCODER_TYPE else None,'temporal_gradients':gradient_summary})+'\n')
-   save(out/'policy_last.ckpt',policy.state_dict());save(out/'training_state.pt',{'policy':policy.state_dict(),'optimizer':optimizer.state_dict(),'step':step,'encoder_sha256':sha(ckpt),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'numpy_rng':np.random.get_state(),'python_rng':random.getstate(),'contract_hash':contract_hash,'sampler_epoch_state':sampler_epoch_state,'sampler_offset':sampler_offset,'alpha_initial':alpha_initial})
+   metrics={'step':step,'train_loss':train_loss,'val_loss':float(np.mean(vals))}
+   if encoder_type==TRA_ENCODER_TYPE:metrics.update(training_stage=training_stage,alpha=alpha_snapshot(tactile),temporal_gradients=gradient_summary)
+   with (out/'metrics.jsonl').open('a') as f:f.write(json.dumps(metrics)+'\n')
+   training_state={'policy':policy.state_dict(),'optimizer':optimizer.state_dict(),'step':step,'encoder_sha256':sha(ckpt),'rng':torch.get_rng_state(),'cuda_rng':torch.cuda.get_rng_state_all(),'numpy_rng':np.random.get_state(),'python_rng':random.getstate(),'contract_hash':contract_hash,'sampler_epoch_state':sampler_epoch_state,'sampler_offset':sampler_offset}
+   if encoder_type==TRA_ENCODER_TYPE:training_state['alpha_initial']=alpha_initial
+   save(out/'policy_last.ckpt',policy.state_dict());save(out/'training_state.pt',training_state)
  assert step==target and micro==target*accum
  loaded=torch.load(out/'policy_last.ckpt',weights_only=True);policy.load_state_dict(loaded,strict=True)
- atomic(out/'completion.json',{'status':'completed','run_id':out.name,'source_commit':a.source_commit,'smoke':a.smoke,'optimizer_updates':step,'micro_iterations':micro,'encoder_sha256':sha(ckpt),'tactile_encoder_type':encoder_type,'tactile_sequence_length':cfg.get('tactile_sequence_length',1),'tactile_temporal_stride':cfg.get('tactile_temporal_stride',1),'spatial_freeze_updates_configured':cfg.get('tactile_spatial_freeze_updates',0),'spatial_freeze_updates_applied':min(step,cfg.get('tactile_spatial_freeze_updates',0)),'spatial_unfreeze_reached':step>=cfg.get('tactile_spatial_freeze_updates',0),'alpha_initial':alpha_initial,'alpha_final':alpha_snapshot(tactile) if encoder_type==TRA_ENCODER_TYPE else None,'checkpoint':'policy_last.ckpt','checkpoint_sha256':sha(out/'policy_last.ckpt'),'dataset_stats_sha256':sha(out/'dataset_stats.pkl'),'policy_split_hash':manifest_hash(split),'elapsed':time.time()-t0})
+ completion_report={'status':'completed','run_id':out.name,'source_commit':a.source_commit,'smoke':a.smoke,'optimizer_updates':step,'micro_iterations':micro,'encoder_sha256':sha(ckpt),'tactile_encoder_type':encoder_type,'tactile_sequence_length':cfg.get('tactile_sequence_length',1),'tactile_temporal_stride':cfg.get('tactile_temporal_stride',1),'checkpoint':'policy_last.ckpt','checkpoint_sha256':sha(out/'policy_last.ckpt'),'dataset_stats_sha256':sha(out/'dataset_stats.pkl'),'policy_split_hash':manifest_hash(split),'elapsed':time.time()-t0}
+ if encoder_type==TRA_ENCODER_TYPE:completion_report.update(spatial_freeze_updates_configured=cfg['tactile_spatial_freeze_updates'],spatial_freeze_updates_applied=min(step,cfg['tactile_spatial_freeze_updates']),spatial_unfreeze_reached=step>=cfg['tactile_spatial_freeze_updates'],alpha_initial=alpha_initial,alpha_final=alpha_snapshot(tactile))
+ atomic(out/'completion.json',completion_report)
  print('completed',out,flush=True)
 if __name__=='__main__':main()
