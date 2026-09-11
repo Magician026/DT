@@ -32,7 +32,7 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Formal evaluation completed on seeds 1000000–1000099: 29/100 successes (29%), 100 valid episodes, no duplicate or missing seed, and zero infrastructure errors.
 - Full-eval outcomes SHA256: `196775418281c6ff20f4a902fa622ec3ad2d577b472d59f13f040fe01397e34d`
 - Result is +1 absolute point versus UniVTAC B0 (28/100), -2 points versus Spatial V2 (31/100), and below the minimum Dynamic V2 target of 33/100.
-- The next bounded iteration is Variant A: retain the architecture and training recipe, changing only T=4 temporal stride from 1 to 2.
+- Historical next step was Variant A; the entire Dynamic V2 route is now stopped by the 2026-09-11 user decision.
 - Historical Spatial V2 HDMI outcomes use seeds 0–99; they are not treated as paired evidence for the required million-seed set.
 
 ## Variant A — T=4, temporal stride 2
@@ -72,3 +72,19 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Gate-0.30 did not satisfy the predeclared condition for a full-100 evaluation, so the automatic triage path initially stopped after quick20.
 - The user subsequently explicitly authorized the Variant B full-100 continuation. This overrides only the triage stop decision; it does not relabel quick20 as an improvement or change any model/training/evaluation parameter.
 - Full evaluation launched on a completely idle GPU 2 with exactly seeds 1000000–1000099 as `runs/eval_full100_dynamic_v2_hdmi_gate30`; launcher PID `1715025`. The formal manifest matches the expected policy, encoder, dataset-stats, source, and seed hashes, and the first episode reset was observed.
+
+## 2026-09-11 route closure and TRA handoff
+
+| Experiment | Insert HDMI result | Evidence |
+| --- | --- | --- |
+| UniVTAC B0 | 28/100 | Existing baseline records; user-confirmed anchor |
+| Spatial Details V2 | 31/100 | `results/detail_v2_eval_0_99.json`; historical seeds 0–99 |
+| Dynamic V2, stride 1 | 29/100; quick 5/20 | Completed full/quick records above; million seeds |
+| Variant A, stride 2 | quick 1/20 | Completed quick record above |
+| Variant B, gate 0.30 | quick 5/20 | Completed quick record above |
+
+Decision: stop the layer2 feature-difference / many-local-dynamic-token route. No further stride, gate, loss-weight, or training-extension experiments. Preserve all checkpoints/configs/results and Git history. This is evidence against this representation, not a conclusion that temporal tactile information has no value.
+
+A previously authorized Variant B full100 continuation was discovered still running. The new user instruction to stop the old route supersedes that continuation: launcher PID 1715025 and Isaac PID 1719088 were terminated (Isaac required SIGKILL after ignoring SIGTERM), and heartbeat `monitor-gate30-full100` was paused. Its partial artifacts remain intact and are not a full100 result. At stop, one valid failure was recorded; this stopping decision was based on the new route cancellation, not its running success rate.
+
+Next experiment: independent Details V2-TRA from the Spatial pretrained encoder SHA256 `914d9d8315a8ccd7fd88ea853b20375a90010ac45968e88e9d2eb386abffe448`; shared current query over four per-frame spatial details, one-layer 256D GRU, small residual MLP, initial sigmoid(alpha)=0.1. Policy-stage temporal learning only; 4000 optimizer updates; freeze Spatial parameters for first 400 updates. Quick uses the same seeds 1000000–1000019; <=5 stops, >=7 proceeds to full100, 6 requires bounded failure/curve review. Historical Spatial seeds differ and will not be presented as a paired evaluation.
