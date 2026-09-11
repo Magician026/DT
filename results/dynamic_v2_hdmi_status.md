@@ -60,4 +60,6 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Formal encoder pretraining completed 3320 steps over five epochs in 1166.38 seconds; best validation loss `0.06920082144818064`.
 - Encoder checkpoint SHA256: `21418c8f34d38564966cdd02db21a2929f2dce9164f404f933be6408756b5791`; strict reload verified T=4, stride=1, initial gate `0.30`, and learned gate `0.2949721813`.
 - ACT policy smoke passed two optimizer updates with nonzero Dynamic gradients, unchanged three-group LR contract, and FrozenBatchNorm behavior.
-- The required three-action simulator smoke is waiting for a completely idle GPU; no GPU currently meets the eval-idle rule, so formal policy has not been launched yet.
+- Three-action simulator smoke passed on GPU 2: `status=smoke_pass`, three actions, three tactile observations, two tactile changes, three unique tactile hashes, and one reset. The source commit, encoder SHA256, T=4, and stride=1 contracts matched.
+- Formal ACT policy training launched on GPU 2 after verifying `24230 MiB` free VRAM. The first real optimizer update completed with two micro-iterations, physical batch 32 × accumulation 2, effective batch 64, and all three learning rates at `1e-5`; training subsequently reached step 50 with finite loss.
+- After the formal run was verified live, the policy/simulator smoke run directories and logs plus the formal `interface_smoke.json` were deleted according to the smoke lifecycle rule.
