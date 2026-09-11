@@ -57,3 +57,9 @@ Heartbeat 2026-09-11 12:00 Asia/Singapore: pipeline/trainer remain healthy onGPU
 - Automatic quick20 started only after GPU2 was fully idle (17MiB,0%util,no compute processes). Manifest matches source, T4/stride1, exact policy and fixed seeds1000000–1000019.
 - At12:31, first3valid episodes were0/3; seed1000003 was running. This is partial progress, not a quick20 result, and is not a stop criterion.
 - Evidence: `results/tra_v1_policy_completion.json`, `results/tra_v1_policy_metrics.jsonl`, `results/tra_v1_policy_verification.json`. No reusable operating constraints changed; no newjob submitted by the heartbeat.
+
+## Access interruption (2026-09-11 13:18)
+
+The heartbeat could not connect: mlda2 resolves to gpu41.dynip.ntu.edu.sg, which returnsNXDOMAIN via localDNS,1.1.1.1,and both NTU authoritative DNS servers. No verified alternateIP was present in scoped existing connection records. Evidence: `results/tra_v1_connection_issue.json`.
+
+No remote job or artifact was changed. Current quick/full result and process state are unknown; DNS failure does not establish experiment failure. Last verified state remains trainingcomplete4000updates and partialquick0/3 at12:31. The original single-run pipeline and30minuteheartbeat remain configured; do not duplicate/restart experiments because monitoring cannot connect. Retry access on the next scheduled check; notify again only if access status meaningfully changes or a different actionable issue appears. This is a transient connection observation, not a new stable server constraint, so canonical operations is unchanged.

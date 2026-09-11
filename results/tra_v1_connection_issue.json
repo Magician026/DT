@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-09-11T13:18:31+08:00",
+  "ssh_alias": "mlda2",
+  "hostname": "gpu41.dynip.ntu.edu.sg",
+  "ssh_error": "Could not resolve hostname",
+  "local_dns": "NXDOMAIN",
+  "public_dns_1_1_1_1": "NXDOMAIN",
+  "ntu_authoritative_dns": [
+    "ndc-dns-ext-01.ntu.edu.sg: NXDOMAIN (authoritative)",
+    "sdc-dns-ext-02.ntu.edu.sg: NXDOMAIN (authoritative)"
+  ],
+  "known_connection_records": "No verified alternate IP found in scoped SSH config/known_hosts/project records",
+  "remote_action_performed": false,
+  "experiment_status": "Unknown since last successful check; not evidence of experiment failure",
+  "last_verified": "Training completed4000updates; quick20 had0success/3valid at12:31; not a final result"
+}
