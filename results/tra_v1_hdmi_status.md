@@ -38,3 +38,11 @@ Real tool roles were used: one `luna_executor` read-only anchor audit and two `s
 ## Formal launch update
 
 Formal pipeline PID3057038 and training child3057201 run on GPU2. Verified step25/4000,50 micro-iterations, loss6.349237, warmup stage, gate0.09999261, nonzero GRU/alpha gradients. Smoke runtime/checkpoints/logs/config/seed and formal interface_smoke.json were deleted only after real progress; exact cleanup paths are archived in canonical operations. Formal training, initialization, seed manifests and tests remain.
+
+Long-run follow-through: server pipeline automatically chains training to quick/full under the fixed thresholds. Thread heartbeat `follow-tra-hdmi-to-evaluation` runs every30minutes to verify completion/failure, handle6/20 with a bounded review, and sync final evidence; it stays quiet when healthy and unchanged and is removed after completion.
+
+Latest verified stage: formal update425/4000 (850micro), loss2.109101, gate0.10002768. The log records the exact transition after400 completed updates to joint_finetune with Spatial trainable. Post-unfreeze forward/backward proceeds with finite nonzero temporal gradients; peak allocated GPU memory12,036,379,136bytes. No hyperparameters changed. Quick evaluation is pending training completion.
+
+First validation checkpoint: update500/4000,1000micro; train_loss1.963796854, val_loss0.179113835, stagejoint_finetune, sigmoid(alpha)0.100032598. This is a training metric, not a success-rate result.
+
+Data equivalence verified: all50 canonical ACT HDF5 files are byte-identical to the historical Spatial input files (fullSHA256 comparison). Evidence: results/tra_v1_data_equivalence.json.
