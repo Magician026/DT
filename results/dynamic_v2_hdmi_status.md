@@ -67,3 +67,6 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Policy checkpoint SHA256: `69568a2755cc05848343d6efcf76a5b953edb0ed7d162c4bf2a3503b6bc666d1`; dataset stats SHA256: `9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b`. Strict final checkpoint reload completed before the run wrote `completion.json`.
 - Final train loss was `0.2156529501`; validation loss was `0.0880860573` at step 4000, after reaching `0.0873541624` at step 3500. Evaluation continues to use `policy_last.ckpt`.
 - Fixed-seed quick evaluation for seeds 1000000–1000019 launched on a completely idle GPU 2 as `runs/eval_quick20_dynamic_v2_hdmi_gate30`.
+- Quick evaluation completed at `5/20` successes (25%) with exactly seeds 1000000–1000019, 20 valid episodes, and zero infrastructure errors. Outcomes SHA256: `a768308d3ffeab606a64ed19334d49a5fbaad02ff69e638384ddc20e53716728`.
+- The paired comparison with Dynamic stride-1 quick is tied at `5/20`: Gate-0.30 gains seed `1000014`, loses seed `1000005`, and matches the other 18 outcomes.
+- Gate-0.30 therefore does not satisfy the predeclared condition for a full-100 evaluation. Variant B is stopped without full100, and the two permitted low-cost iterations are complete; no further architecture variant is started.
