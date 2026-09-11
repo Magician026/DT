@@ -63,3 +63,7 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Three-action simulator smoke passed on GPU 2: `status=smoke_pass`, three actions, three tactile observations, two tactile changes, three unique tactile hashes, and one reset. The source commit, encoder SHA256, T=4, and stride=1 contracts matched.
 - Formal ACT policy training launched on GPU 2 after verifying `24230 MiB` free VRAM. The first real optimizer update completed with two micro-iterations, physical batch 32 × accumulation 2, effective batch 64, and all three learning rates at `1e-5`; training subsequently reached step 50 with finite loss.
 - After the formal run was verified live, the policy/simulator smoke run directories and logs plus the formal `interface_smoke.json` were deleted according to the smoke lifecycle rule.
+- Formal ACT policy training completed 4000 optimizer updates / 8000 micro-iterations in 3549.83 seconds with physical batch 32 × accumulation 2, effective batch 64, and all three learning rates at `1e-5`.
+- Policy checkpoint SHA256: `69568a2755cc05848343d6efcf76a5b953edb0ed7d162c4bf2a3503b6bc666d1`; dataset stats SHA256: `9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b`. Strict final checkpoint reload completed before the run wrote `completion.json`.
+- Final train loss was `0.2156529501`; validation loss was `0.0880860573` at step 4000, after reaching `0.0873541624` at step 3500. Evaluation continues to use `policy_last.ckpt`.
+- Fixed-seed quick evaluation for seeds 1000000–1000019 launched on a completely idle GPU 2 as `runs/eval_quick20_dynamic_v2_hdmi_gate30`.
