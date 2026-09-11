@@ -69,4 +69,6 @@ Updated: 2026-09-11 (Asia/Singapore)
 - Fixed-seed quick evaluation for seeds 1000000–1000019 launched on a completely idle GPU 2 as `runs/eval_quick20_dynamic_v2_hdmi_gate30`.
 - Quick evaluation completed at `5/20` successes (25%) with exactly seeds 1000000–1000019, 20 valid episodes, and zero infrastructure errors. Outcomes SHA256: `a768308d3ffeab606a64ed19334d49a5fbaad02ff69e638384ddc20e53716728`.
 - The paired comparison with Dynamic stride-1 quick is tied at `5/20`: Gate-0.30 gains seed `1000014`, loses seed `1000005`, and matches the other 18 outcomes.
-- Gate-0.30 therefore does not satisfy the predeclared condition for a full-100 evaluation. Variant B is stopped without full100, and the two permitted low-cost iterations are complete; no further architecture variant is started.
+- Gate-0.30 did not satisfy the predeclared condition for a full-100 evaluation, so the automatic triage path initially stopped after quick20.
+- The user subsequently explicitly authorized the Variant B full-100 continuation. This overrides only the triage stop decision; it does not relabel quick20 as an improvement or change any model/training/evaluation parameter.
+- Full evaluation launched on a completely idle GPU 2 with exactly seeds 1000000–1000099 as `runs/eval_full100_dynamic_v2_hdmi_gate30`; launcher PID `1715025`. The formal manifest matches the expected policy, encoder, dataset-stats, source, and seed hashes, and the first episode reset was observed.
