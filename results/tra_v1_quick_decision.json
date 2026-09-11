@@ -1,0 +1,6 @@
+{
+  "decision": "stop",
+  "successes": 4,
+  "valid": 20,
+  "thresholds": "<=5 stop; 6 bounded review; >=7 full100"
+}

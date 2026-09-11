@@ -1,0 +1,62 @@
+{
+  "verified_at": "2026-09-11T14:44:45.684121+08:00",
+  "remote_root": "/usr1/home/s126mdg41_04/UniVTAC details v2/tra_v1_20260911",
+  "source_commit": "5ac9bfe239e73c72ea92ec3918bd23099ff23697",
+  "status": "stopped_after_quick",
+  "success_count": 4,
+  "valid_episode_count": 20,
+  "expected_seeds": [
+    1000000,
+    1000001,
+    1000002,
+    1000003,
+    1000004,
+    1000005,
+    1000006,
+    1000007,
+    1000008,
+    1000009,
+    1000010,
+    1000011,
+    1000012,
+    1000013,
+    1000014,
+    1000015,
+    1000016,
+    1000017,
+    1000018,
+    1000019
+  ],
+  "missing_seeds": [],
+  "duplicate_seeds": [],
+  "infrastructure_error_count": 0,
+  "success_seeds": [
+    1000005,
+    1000007,
+    1000008,
+    1000016
+  ],
+  "outcomes_sha256": "25a8d68feaf993507e74999bfac2ad23d6ed20793c53464cbf53588ddde311ac",
+  "source_files": {
+    "tra_v1_quick_completion.json": "runs/eval_quick20_tra_v1_hdmi/results/completion.json",
+    "tra_v1_quick_outcomes.jsonl": "runs/eval_quick20_tra_v1_hdmi/results/outcomes.jsonl",
+    "tra_v1_quick_manifest.json": "runs/eval_quick20_tra_v1_hdmi/manifest.json",
+    "tra_v1_pipeline_status.json": "results/pipeline_status.json",
+    "tra_v1_quick_decision.json": "results/quick_decision.json",
+    "tra_v1_quick_summary.json": "results/eval_quick20_tra_v1_hdmi.json"
+  },
+  "files_sha256": {
+    "tra_v1_quick_completion.json": "c8ede81bee96b2f5d857aebf2b2a7597ef01908b69fc46f9453f2ad0fabc9bc4",
+    "tra_v1_quick_outcomes.jsonl": "25a8d68feaf993507e74999bfac2ad23d6ed20793c53464cbf53588ddde311ac",
+    "tra_v1_quick_manifest.json": "03b5a5436f3fcf00b855c0018016fa83011fea6294e7ecd80d99ad46c8304d15",
+    "tra_v1_pipeline_status.json": "bf6469cb345576c0b4dc3bea8a6105468bfb7d6f03bcaeb3810f62d8316da346",
+    "tra_v1_quick_decision.json": "bb736eed4418e7cb6ebda123c82ada2b8536cc8b068154a6fdb01943d558afe2",
+    "tra_v1_quick_summary.json": "4dd847f831b2a3f0e3c25cb7639a25f7cb5ec0ac3210f325fb9d700baf41c339"
+  },
+  "checkpoint_stats_encoder_match": true,
+  "full100_directory_exists": false,
+  "matching_remote_processes": [],
+  "pipeline_pid_file": 3057038,
+  "pipeline_pid_ps": "",
+  "decision": "Stop TRA v1 per preregistered <=5/20 gate; no full100 or sweeps."
+}

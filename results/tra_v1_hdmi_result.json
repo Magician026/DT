@@ -1,0 +1,77 @@
+{
+  "experiment": "Details V2-TRA v1 Insert HDMI",
+  "status": "closed_stopped_after_quick",
+  "verified_at": "2026-09-11T14:44:45.684121+08:00",
+  "source_commit": "5ac9bfe239e73c72ea92ec3918bd23099ff23697",
+  "training": {
+    "optimizer_updates": 4000,
+    "micro_iterations": 8000,
+    "physical_batch": 32,
+    "gradient_accumulation": 2,
+    "spatial_frozen_updates": 400,
+    "alpha_initial": 0.10000000149011612,
+    "alpha_final": 0.1001756340265274,
+    "final_validation_loss": 0.09331534802913666
+  },
+  "comparison": [
+    {
+      "model": "UniVTAC B0",
+      "successes": 28,
+      "episodes": 100,
+      "evaluation": "historical full100"
+    },
+    {
+      "model": "Spatial Details V2",
+      "successes": 31,
+      "episodes": 100,
+      "seed_range": [
+        0,
+        99
+      ],
+      "evaluation": "historical full100"
+    },
+    {
+      "model": "Details V2-TRA v1",
+      "successes": 4,
+      "episodes": 20,
+      "seed_range": [
+        1000000,
+        1000019
+      ],
+      "evaluation": "quick20"
+    }
+  ],
+  "quick": {
+    "successes": 4,
+    "valid_episodes": 20,
+    "success_rate": 0.2,
+    "infrastructure_errors": 0,
+    "missing_seeds": [],
+    "duplicate_seeds": [],
+    "success_seeds": [
+      1000005,
+      1000007,
+      1000008,
+      1000016
+    ],
+    "outcomes_sha256": "25a8d68feaf993507e74999bfac2ad23d6ed20793c53464cbf53588ddde311ac"
+  },
+  "full100": {
+    "run": false,
+    "successes": null,
+    "valid_episodes": null,
+    "reason": "Prespecified <=5/20 stop gate triggered."
+  },
+  "provenance": {
+    "policy_checkpoint_sha256": "148b28e2c26d962f9747272cf431d64c18b80d91fab68c98b924cb80c883ff18",
+    "dataset_stats_sha256": "9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b",
+    "encoder_sha256": "bbfbd856e2e0a473cd309189ebb4af3e7d59bb7a04c17aa4a0a937204980a99c",
+    "seed_manifest_sha256": "9361cd7bcc4ad3c121d2e0532ed52c4758b79c54a1858396eca11c3d10341862",
+    "source_tree_sha256": "9572e72895921bb8ade1e2888b413b87c35f9cb410eb43e1ba3e16aff64f75b2",
+    "train_config_sha256": "cfe86fef1cefc683eb23641f0a83ec85ff24d955d370f0d3a35cd02ccd2a9bb7"
+  },
+  "interpretation": "No evidence sufficient to advance TRA v1 under the prespecified quick-eval rule. Close this version without sweeps. Temporal tactile value itself is not ruled out.",
+  "comparison_limitation": "Historical Spatial seeds 0-99 differ from TRA seeds 1000000-1000019; not a paired comparison. TRA has no full100 measurement.",
+  "artifacts_preserved": true,
+  "further_training_or_eval_planned": false
+}

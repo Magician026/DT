@@ -2,6 +2,26 @@
 
 Updated: 2026-09-11 (Asia/Singapore)
 
+## Final disposition — stopped after quick20
+
+Verified 2026-09-11 14:44 Asia/Singapore. **TRA v1: 4/20 (20%)**. The single pipeline completed quick20 at 13:07 and exited with `stopped_after_quick`. Under the locked `<=5/20` rule, this version is closed: no full100, retraining, pretraining loss, or sweep. The full100 run directory does not exist; no process referencing this TRA root remains. All formal checkpoints, configurations, logs, outcomes and immutable source snapshots are retained.
+
+| Model | Insert HDMI result | Evaluation seeds |
+| --- | --- | --- |
+| UniVTAC B0 | 28/100 | Historical baseline |
+| Spatial Details V2 | 31/100 | Historical 0–99 |
+| Details V2-TRA v1 | **4/20 quick**; full100 not run | 1000000–1000019 |
+
+The quick result does not support advancement under the prespecified gate. It is not a measured full100 success rate and does not establish that temporal tactile information has no value. Spatial's historical seeds0–99 differ from TRA's seeds, so this is **not a paired comparison**. No architecture or training recipe was changed after seeing results.
+
+- Quick has exactly20 valid seeds1000000–1000019, no missing/duplicate seeds and zero infrastructure errors. Success seeds:1000005,1000007,1000008,1000016. Outcomes SHA256 `25a8d68feaf993507e74999bfac2ad23d6ed20793c53464cbf53588ddde311ac`.
+- Completion/manifest provenance matches the locked source5ac9bfe, policy_last.ckpt, datasetstats, initialencoder, T4/stride1 and seedmanifest. Training checks remain passed:4000updates/8000micro/32×2, actual unfreeze after400, nonzeroGRU/alpha gradients, alpha update and strictreload.
+- DNS access recovered by this verification without changing SSH configuration or restarting any job. The earlier interruption below is historical, not a current blocker.
+- Final evidence: `tra_v1_quick_completion.json`, `tra_v1_quick_outcomes.jsonl`, `tra_v1_quick_manifest.json`, `tra_v1_quick_summary.json`, `tra_v1_pipeline_status.json`, `tra_v1_quick_decision.json`, `tra_v1_final_verification.json`, and `tra_v1_hdmi_result.json` in this directory.
+- Experiment processing is complete; remove `follow-tra-hdmi-to-evaluation` after synchronizing final records. The old Dynamic monitor remains paused and that route remains stopped.
+
+The dated execution and access records below are retained as history; this final disposition supersedes their then-current stages.
+
 ## Locked experiment
 
 - Source: `5ac9bfe239e73c72ea92ec3918bd23099ff23697`; branch `codex/details-v2-tra`.
