@@ -227,7 +227,7 @@ class TacArenaDataset(torch.utils.data.Dataset):
             for tactile_name in self.tactile_names:
                 tactile_dict[tactile_name] = root[f"/observations/images/{tactile_name}"][start_ts]
         else:
-            from encoder.dynamic_data import causal_history_indices
+            from encoder.temporal_history import causal_history_indices
 
             history_indices = causal_history_indices(
                 start_ts,

@@ -460,6 +460,7 @@ def build_encoder(
     sequence_length: int = 4,
     temporal_stride: int = 1,
     initial_gate: float = 0.15,
+    initial_temporal_gate: float = 0.1,
     weights: Any = None,
     trunk_state: Mapping[str, Tensor] | None = None,
 ) -> OriginalEncoder | DetailV2Encoder | DynamicDetailV2Encoder:
@@ -494,6 +495,22 @@ def build_encoder(
             sequence_length=sequence_length,
             temporal_stride=temporal_stride,
             initial_gate=initial_gate,
+            weights=weights,
+            trunk_state=trunk_state,
+        )
+    if encoder_type == "detail_v2_tra":
+        from .tra_v2 import TRADetailV2Encoder
+
+        return TRADetailV2Encoder(
+            backbone=backbone,
+            input_channels=input_channels,
+            latent_dims=latent_dims,
+            token_dim=token_dim,
+            num_heads=num_heads,
+            attention_dropout=attention_dropout,
+            sequence_length=sequence_length,
+            temporal_stride=temporal_stride,
+            initial_temporal_gate=initial_temporal_gate,
             weights=weights,
             trunk_state=trunk_state,
         )
@@ -712,6 +729,10 @@ def load_encoder_checkpoint(
         raise TypeError("checkpoint structure must be a mapping")
     if encoder_type == "detail_v2_dynamic":
         _validate_dynamic_structure(structure)
+    elif encoder_type == "detail_v2_tra":
+        from .tra_v2 import validate_tra_structure
+
+        validate_tra_structure(structure)
     else:
         expected_structure = {
             "original": _ORIGINAL_STRUCTURE,
@@ -738,6 +759,16 @@ def load_encoder_checkpoint(
     return encoder, metadata
 
 
+def warm_start_tra_encoder(
+    source: str | os.PathLike[str] | Mapping[str, Any],
+    **structure: Any,
+) -> tuple[DetailV2Encoder, dict[str, Any]]:
+    """Lazily dispatch the strict Spatial V2 to TRA warm-start."""
+    from .tra_v2 import warm_start_tra_encoder as _warm_start_tra_encoder
+
+    return _warm_start_tra_encoder(source, **structure)
+
+
 __all__ = [
     "DetailV2Encoder",
     "DynamicDetailV2Encoder",
@@ -748,4 +779,5 @@ __all__ = [
     "load_encoder_checkpoint",
     "save_encoder_checkpoint",
     "warm_start_dynamic_encoder",
+    "warm_start_tra_encoder",
 ]

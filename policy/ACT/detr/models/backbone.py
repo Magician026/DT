@@ -38,6 +38,8 @@ from encoder.detail_v2 import (
     load_encoder_checkpoint,
 )
 
+from encoder.tra_v2 import TRADetailV2Encoder
+
 import IPython
 
 e = IPython.embed
@@ -175,7 +177,7 @@ class TactileBackbone(nn.Module):
         self.tac_names = tac_names
         self.num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
 
-        if tactile_encoder_type in ('detail_v2', 'detail_v2_dynamic'):
+        if tactile_encoder_type in ('detail_v2', 'detail_v2_dynamic', 'detail_v2_tra'):
             if name != 'resnet18':
                 raise ValueError(
                     f"{tactile_encoder_type} requires tactile_backbone='resnet18'"
@@ -189,11 +191,11 @@ class TactileBackbone(nn.Module):
                 expected_encoder_type=tactile_encoder_type,
                 expected_preprocess=PREPROCESS,
             )
-            expected_class = (
-                DetailV2Encoder
-                if tactile_encoder_type == 'detail_v2'
-                else DynamicDetailV2Encoder
-            )
+            expected_class = {
+                'detail_v2': DetailV2Encoder,
+                'detail_v2_dynamic': DynamicDetailV2Encoder,
+                'detail_v2_tra': TRADetailV2Encoder,
+            }[tactile_encoder_type]
             if type(encoder) is not expected_class:
                 raise TypeError(
                     f"{tactile_encoder_type} checkpoint loader returned a "

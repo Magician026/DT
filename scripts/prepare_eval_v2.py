@@ -82,9 +82,9 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
     if not isinstance(config, Mapping):
         raise ValueError("train_config.yml must contain a mapping")
     encoder_type = config.get("tactile_encoder_type")
-    if encoder_type not in ("detail_v2", "detail_v2_dynamic"):
+    if encoder_type not in ("detail_v2", "detail_v2_dynamic", "detail_v2_tra"):
         raise ValueError(
-            "train_config must use tactile_encoder_type=detail_v2 or detail_v2_dynamic"
+            "train_config must use a canonical Spatial, Dynamic, or TRA tactile_encoder_type"
         )
     if config.get("tactile_type") != "feat":
         raise ValueError("train_config must use tactile_type=feat")
@@ -93,7 +93,7 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
         raise ValueError("train_config tactile_ckpt must be an existing absolute path")
     if _sha256(tactile_checkpoint) != completion.get("encoder_sha256"):
         raise ValueError("encoder SHA256 does not match policy completion")
-    if encoder_type == "detail_v2_dynamic":
+    if encoder_type in ("detail_v2_dynamic", "detail_v2_tra"):
         temporal_metadata = {
             "tactile_sequence_length": config.get("tactile_sequence_length"),
             "tactile_temporal_stride": config.get("tactile_temporal_stride"),
@@ -102,10 +102,10 @@ def _validate_policy_run(policy_run: Path, *, allow_smoke: bool, smoke_steps: in
         if (
             temporal_metadata["tactile_sequence_length"] != 4
             or type(temporal_stride) is not int
-            or temporal_stride not in (1, 2)
+            or temporal_stride not in ((1,) if encoder_type == "detail_v2_tra" else (1, 2))
         ):
             raise ValueError(
-                "dynamic tactile temporal metadata must be length=4 and stride=1 or 2"
+                "temporal metadata must be length=4 and stride=1 for TRA, stride=1 or 2 for Dynamic"
             )
         if any(completion.get(key) != value for key, value in temporal_metadata.items()):
             raise ValueError("dynamic tactile temporal metadata differs from completion")
