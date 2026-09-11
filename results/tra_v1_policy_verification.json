@@ -1,0 +1,38 @@
+{
+  "status": "passed",
+  "completion": {
+    "status": "completed",
+    "run_id": "policy_tra_v1_hdmi",
+    "source_commit": "5ac9bfe239e73c72ea92ec3918bd23099ff23697",
+    "smoke": false,
+    "optimizer_updates": 4000,
+    "micro_iterations": 8000,
+    "encoder_sha256": "bbfbd856e2e0a473cd309189ebb4af3e7d59bb7a04c17aa4a0a937204980a99c",
+    "tactile_encoder_type": "detail_v2_tra",
+    "tactile_sequence_length": 4,
+    "tactile_temporal_stride": 1,
+    "checkpoint": "policy_last.ckpt",
+    "checkpoint_sha256": "148b28e2c26d962f9747272cf431d64c18b80d91fab68c98b924cb80c883ff18",
+    "dataset_stats_sha256": "9a92d7fe5873612d71240ecc667679ea517aadf0561e640a7d68571f02fc272b",
+    "policy_split_hash": "b40d2521b5e689d03d7ff22ba0f79d7a7e81c64c40d91a720be58d27c9aae70f",
+    "elapsed": 3294.032996892929,
+    "spatial_freeze_updates_configured": 400,
+    "spatial_freeze_updates_applied": 400,
+    "spatial_unfreeze_reached": true,
+    "alpha_initial": {
+      "raw": -2.1972246170043945,
+      "sigmoid": 0.10000000149011612
+    },
+    "alpha_final": {
+      "raw": -2.195274591445923,
+      "sigmoid": 0.1001756340265274
+    }
+  },
+  "final_val_loss": 0.09331534802913666,
+  "best_val_loss": 0.09331534802913666,
+  "final_train_loss": 0.22137003391981125,
+  "checkpoint_size_bytes": 386062104,
+  "hashes_recomputed_match": true,
+  "strict_reload_evidence": "Immutable train_policy_v2.py strict load_state_dict completed before completion.json; live eval loaded same checkpoint successfully.",
+  "quick_manifest_matches": true
+}

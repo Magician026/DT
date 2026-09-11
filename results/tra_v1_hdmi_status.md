@@ -46,3 +46,14 @@ Latest verified stage: formal update425/4000 (850micro), loss2.109101, gate0.100
 First validation checkpoint: update500/4000,1000micro; train_loss1.963796854, val_loss0.179113835, stagejoint_finetune, sigmoid(alpha)0.100032598. This is a training metric, not a success-rate result.
 
 Data equivalence verified: all50 canonical ACT HDF5 files are byte-identical to the historical Spatial input files (fullSHA256 comparison). Evidence: results/tra_v1_data_equivalence.json.
+
+Heartbeat 2026-09-11 12:00 Asia/Singapore: pipeline/trainer remain healthy onGPU2; observed2825/4000updates,5650micro, trainloss0.414801, latest validation at2500=0.101571944, sigmoid(alpha)=0.100143574 and nonzeroGRU/alpha gradients. No completion or quickeval yet; same recipe/stage, no intervention. No reusable operations facts changed.
+
+## Training completed; quick evaluation running (2026-09-11 12:31)
+
+- Formal ACT completed4000 optimizer updates /8000micro in3294.03s, physical32×2 and all3LR groups1e-5. Freeze applied400updates, then jointfine-tune; final GRU/alpha gradients nonzero.
+- Final/best validation loss0.0933153480; final trainloss0.2213700339. Initial gate0.1000000015→final0.1001756340.
+- Final policy_last.ckpt size386,062,104bytes, SHA256 `148b28e2c26d962f9747272cf431d64c18b80d91fab68c98b924cb80c883ff18`. SHA independently recomputed; datasetstats and initencoder SHA also match locked values. Immutable trainer strict-loads the saved checkpoint before writing completion; liveeval loaded the same checkpoint.
+- Automatic quick20 started only after GPU2 was fully idle (17MiB,0%util,no compute processes). Manifest matches source, T4/stride1, exact policy and fixed seeds1000000–1000019.
+- At12:31, first3valid episodes were0/3; seed1000003 was running. This is partial progress, not a quick20 result, and is not a stop criterion.
+- Evidence: `results/tra_v1_policy_completion.json`, `results/tra_v1_policy_metrics.jsonl`, `results/tra_v1_policy_verification.json`. No reusable operating constraints changed; no newjob submitted by the heartbeat.
