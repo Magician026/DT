@@ -18,7 +18,7 @@ The quick result does not support advancement under the prespecified gate. It is
 - Completion/manifest provenance matches the locked source5ac9bfe, policy_last.ckpt, datasetstats, initialencoder, T4/stride1 and seedmanifest. Training checks remain passed:4000updates/8000micro/32×2, actual unfreeze after400, nonzeroGRU/alpha gradients, alpha update and strictreload.
 - DNS access recovered by this verification without changing SSH configuration or restarting any job. The earlier interruption below is historical, not a current blocker.
 - Final evidence: `tra_v1_quick_completion.json`, `tra_v1_quick_outcomes.jsonl`, `tra_v1_quick_manifest.json`, `tra_v1_quick_summary.json`, `tra_v1_pipeline_status.json`, `tra_v1_quick_decision.json`, `tra_v1_final_verification.json`, and `tra_v1_hdmi_result.json` in this directory.
-- Experiment processing is complete; remove `follow-tra-hdmi-to-evaluation` after synchronizing final records. The old Dynamic monitor remains paused and that route remains stopped.
+- Final result/evidence commit `ec010ac` was pushed to `Magician026/DT` branch `codex/details-v2-tra` and final records synchronized to canonical remote results. Then `follow-tra-hdmi-to-evaluation` was deleted; the automation tool returned `deleteStatus=deleted`. No monitoring or experimental work remains. The old Dynamic monitor remains paused and that route remains stopped.
 
 The dated execution and access records below are retained as history; this final disposition supersedes their then-current stages.
 
